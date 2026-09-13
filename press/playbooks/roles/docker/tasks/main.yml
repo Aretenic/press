@@ -48,6 +48,7 @@
     groups:
       - docker
     append: true
+  notify: Restart agent to pick up docker group
 
 - name: Setup Docker Metrics
   template:

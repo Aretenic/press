@@ -1,0 +1,7 @@
+---
+# A running process never gains a supplementary group, so the agent (started by
+# the agent role, before this one) cannot reach /var/run/docker.sock until it is
+# restarted. Without this the first image build on a new server fails with
+# "permission denied while trying to connect to the Docker daemon socket".
+- name: Restart agent to pick up docker group
+  shell: supervisorctl avail | grep -q '^agent:' && supervisorctl restart 'agent:' || true
