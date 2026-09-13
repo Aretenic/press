@@ -1,6 +1,6 @@
 ---
 - name: "Ensure message of the day is configured properly"
-  copy:
+  template:
       src: motd.j2
       dest: /etc/motd
       owner: root
@@ -8,7 +8,7 @@
       mode: 0644
 
 - name: "Ensure local login warning banner is configured properly"
-  copy:
+  template:
       src: issue.j2
       dest: /etc/issue
       owner: root
@@ -16,7 +16,7 @@
       mode: 0644
 
 - name: "Ensure remote login warning banner is configured properly"
-  copy:
+  template:
       src: issue.j2
       dest: /etc/issue.net
       owner: root
@@ -24,7 +24,7 @@
       mode: 0644
 
 - name: "Ensure remote login warning banner is configured for ssh"
-  copy:
+  template:
       src: issue.j2
       dest: /etc/login.warn
       owner: root
