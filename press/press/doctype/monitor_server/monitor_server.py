@@ -14,7 +14,7 @@ from requests.auth import HTTPBasicAuth
 
 from press.press.doctype.server.server import BaseServer
 from press.runner import Ansible
-from press.utils import log_error
+from press.utils import get_agent_press_url, log_error
 
 
 class SitesDownAlertLabels(TypedDict):
@@ -128,7 +128,7 @@ class MonitorServer(BaseServer):
 					"monitoring_password": cluster.get_password("monitoring_password"),
 				}
 			)
-		press_url = frappe.utils.get_url()
+		press_url = get_agent_press_url()
 		settings = frappe.get_single("Press Settings")
 		monitor_token = settings.monitor_token
 		press_monitoring_password = settings.get_password("press_monitoring_password")

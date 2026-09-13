@@ -399,6 +399,15 @@ def get_press_base_url():
 	return press_url.rstrip("/")
 
 
+def get_agent_press_url():
+	"""URL agents call back to with job results.
+
+	Set `agent_press_url` in site config to keep agent traffic on the private
+	network (e.g. http://10.0.1.1:8000); otherwise the public base URL is used.
+	"""
+	return (frappe.conf.get("agent_press_url") or get_press_base_url()).rstrip("/")
+
+
 class RemoteFrappeSite:
 	def __init__(self, url, usr, pwd):
 		if not url.startswith("http"):

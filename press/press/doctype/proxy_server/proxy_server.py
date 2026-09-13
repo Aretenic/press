@@ -10,7 +10,7 @@ from frappe.utils import unique
 from press.press.doctype.server.server import BaseServer
 from press.runner import Ansible
 from press.security import fail2ban
-from press.utils import log_error
+from press.utils import get_agent_press_url, log_error
 
 # ProxySQL image version rolled out to all proxies. Bumped from 2.3.2 to fix
 # ProxySQL failing to serve newly issued Let's Encrypt certificates.
@@ -152,7 +152,7 @@ class ProxyServer(BaseServer):
 					"certificate_private_key": certificate.get_private_key(),
 					"certificate_full_chain": certificate.full_chain,
 					"certificate_intermediate_chain": certificate.intermediate_chain,
-					"press_url": frappe.utils.get_url(),
+					"press_url": get_agent_press_url(),
 				},
 			)
 			play = ansible.run()

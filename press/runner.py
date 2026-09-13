@@ -197,6 +197,22 @@ class AnsibleCallback(CallbackBase):
 		frappe.db.commit()
 
 
+def _fleet_defaults() -> dict:
+	"""Variables every playbook may rely on; a caller's own variables still win.
+
+	press_url: without it the agent role never passes --press-url, and agents on
+	app and database servers fall back to their built-in https://frappecloud.com,
+	posting job callbacks to a third party instead of this Press.
+	"""
+	from press.utils import get_agent_press_url
+
+	defaults = {"press_url": get_agent_press_url()}
+	for key in ("warning_banner_organization", "warning_banner_contact"):
+		if value := frappe.conf.get(key):
+			defaults[key] = value
+	return defaults
+
+
 class Ansible:
 	def __init__(self, server, playbook, user="root", variables=None, port=22):
 		self.server = server
@@ -204,7 +220,8 @@ class Ansible:
 		self.playbook_path = frappe.get_app_path("press", "playbooks", self.playbook)
 		self.host = server.ip if server.ip else server.private_ip
 		# Every playbook gets the provider, so templates don't depend on the caller passing it
-		self.variables = {"cloud_provider": server.get("provider") or ""} | (variables or {})
+		defaults = {"cloud_provider": server.get("provider") or ""} | _fleet_defaults()
+		self.variables = defaults | (variables or {})
 
 		constants.HOST_KEY_CHECKING = False
 		context.CLIARGS = ImmutableDict(
