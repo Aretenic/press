@@ -31,8 +31,16 @@ runcmd:
     netplan apply
 {% endif %}
 
+{#- Aretenic: Frappe Cloud's SSH CA grants Frappe Technologies login as frappe on every server.
+    Self-hosted servers never trust it; strip it in case the machine image already carries it. #}
+{% if trust_frappe_ssh_ca %}
 - mkdir /etc/ssh/auth_principals
 - curl https://cloud.frappe.io/files/ca.pub > /etc/ssh/ca.pub && chmod 644 /etc/ssh/ca.pub
+{% else %}
+- sed -i '/^TrustedUserCAKeys \/etc\/ssh\/ca.pub$/d; /^AuthorizedPrincipalsFile \/etc\/ssh\/auth_principals\/%u$/d' /etc/ssh/sshd_config
+- rm -rf /etc/ssh/ca.pub /etc/ssh/auth_principals
+- systemctl reload ssh || true
+{% endif %}
 - su - frappe -c "cd /home/frappe/agent && env/bin/agent setup config --name {{ server.name }} --workers 2"
 - su - frappe -c "cd /home/frappe/agent && env/bin/agent setup authentication --password {{ agent_password }}"
 - su - frappe -c "htpasswd -Bbc /home/frappe/agent/nginx/monitoring.htpasswd frappe {{ monitoring_password }}"
@@ -100,6 +108,7 @@ write_files:
   content: |
     {{ filebeat_config | indent(4) }}
 
+{% if trust_frappe_ssh_ca %}
 - path: /etc/ssh/auth_principals/frappe
   defer: true
   content: |
@@ -111,6 +120,7 @@ write_files:
   content: |
     TrustedUserCAKeys /etc/ssh/ca.pub
     AuthorizedPrincipalsFile /etc/ssh/auth_principals/%u
+{% endif %}
 
 {% if server.doctype == 'Database Server' or is_unified_server %}
 - path: /etc/mysql/conf.d/frappe.cnf

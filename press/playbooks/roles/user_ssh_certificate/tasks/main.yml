@@ -1,5 +1,10 @@
 ---
+# Aretenic: upstream makes every server trust Frappe Cloud's SSH certificate authority
+# (https://cloud.frappe.io/files/ca.pub), which lets Frappe Technologies log in as frappe.
+# Self-hosted servers must not trust it, so this role only installs it when
+# trust_frappe_ssh_ca is explicitly true, and otherwise removes any trust already present.
 - name: Setup ca public key to verify signed certificates
+  when: trust_frappe_ssh_ca | default(false) | bool
   block:
     - name: Setup certificate-authority key file
       get_url:
@@ -13,8 +18,6 @@
         group: root
         mode: 0644
 
-- name: Setup authorized principals for certificate authority
-  block:
     - name: Create auth_principals directory
       file:
         path: /etc/ssh/auth_principals
@@ -29,7 +32,6 @@
           all-servers
           {{ server | default(inventory_hostname) }}
 
-
     - name: Add certificate authority key location to sshd_config
       lineinfile:
         state: present
@@ -40,6 +42,27 @@
       with_items:
         - "TrustedUserCAKeys /etc/ssh/ca.pub"
         - "AuthorizedPrincipalsFile /etc/ssh/auth_principals/%u"
+
+- name: Remove trust in Frappe Cloud's certificate authority
+  when: not (trust_frappe_ssh_ca | default(false) | bool)
+  block:
+    - name: Remove certificate authority lines from sshd_config
+      lineinfile:
+        state: absent
+        path: /etc/ssh/sshd_config
+        backup: yes
+        line: "{{ item }}"
+      with_items:
+        - "TrustedUserCAKeys /etc/ssh/ca.pub"
+        - "AuthorizedPrincipalsFile /etc/ssh/auth_principals/%u"
+
+    - name: Remove certificate authority key and principals
+      file:
+        path: "{{ item }}"
+        state: absent
+      with_items:
+        - /etc/ssh/ca.pub
+        - /etc/ssh/auth_principals
 
 - name: Restart sshd service
   service:
