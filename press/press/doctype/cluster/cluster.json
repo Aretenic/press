@@ -45,6 +45,9 @@
 		"hetzner_api_token",
 		"digital_ocean_section",
 		"digital_ocean_api_token",
+		"vultr_section",
+		"vultr_api_token",
+		"vultr_ssh_allowed_ips",
 		"oci_section",
 		"oci_user",
 		"oci_public_key",
@@ -99,7 +102,7 @@
 			"fieldtype": "Select",
 			"in_list_view": 1,
 			"label": "Cloud Provider",
-			"options": "AWS EC2\nGeneric\nOCI\nHetzner\nDigitalOcean\nFrappe Compute",
+			"options": "AWS EC2\nGeneric\nOCI\nHetzner\nDigitalOcean\nFrappe Compute\nVultr",
 			"reqd": 1,
 			"set_only_once": 1
 		},
@@ -428,6 +431,24 @@
 			"fieldname": "digital_ocean_api_token",
 			"fieldtype": "Password",
 			"label": "Digital Ocean API Token"
+		},
+		{
+			"collapsible": 1,
+			"depends_on": "eval: doc.cloud_provider == \"Vultr\"",
+			"fieldname": "vultr_section",
+			"fieldtype": "Section Break",
+			"label": "Vultr"
+		},
+		{
+			"fieldname": "vultr_api_token",
+			"fieldtype": "Password",
+			"label": "Vultr API Key"
+		},
+		{
+			"description": "Public IPv4 addresses or CIDRs allowed to reach SSH (port 22) on servers, one per line. Include the Press host. Leave empty to allow SSH from anywhere.",
+			"fieldname": "vultr_ssh_allowed_ips",
+			"fieldtype": "Small Text",
+			"label": "SSH Allowed From"
 		},
 		{
 			"fieldname": "database_section",

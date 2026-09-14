@@ -39,6 +39,7 @@ def get_data(provider, cluster):
 	fetch_untracked = {
 		"Hetzner": get_untracked_hetzner_servers,
 		"DigitalOcean": get_untracked_digital_ocean_droplets,
+		"Vultr": get_untracked_vultr_instances,
 	}[provider]
 
 	clusters = [frappe.get_doc("Cluster", name) for name in get_clusters(provider, cluster)]
@@ -213,3 +214,16 @@ def get_untracked_digital_ocean_droplets(cluster):
 			break
 		page += 1
 	return rows
+
+
+def get_untracked_vultr_instances(cluster):
+	from press.vultr_client import provider as vultr
+
+	if not cluster.get_password("vultr_api_token", raise_exception=False):
+		frappe.throw(f"Vultr API key is not configured on Cluster {cluster.name}")
+
+	known_instance_ids = get_known_instance_ids("Vultr", cluster=cluster.name)
+	return [
+		{"provider": "Vultr", "cluster": cluster.name, "region": cluster.region, **row}
+		for row in vultr.get_untracked_instances(cluster, set(known_instance_ids))
+	]

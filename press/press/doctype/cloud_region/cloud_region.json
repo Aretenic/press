@@ -20,7 +20,7 @@
 			"fieldname": "provider",
 			"fieldtype": "Select",
 			"label": "Provider",
-			"options": "AWS EC2\nOCI\nHetzner\nDigitalOcean\nFrappe Compute",
+			"options": "AWS EC2\nOCI\nHetzner\nDigitalOcean\nFrappe Compute\nVultr",
 			"reqd": 1
 		}
 	],

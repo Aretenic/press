@@ -188,7 +188,7 @@
 			"fieldname": "provider",
 			"fieldtype": "Select",
 			"label": "Provider",
-			"options": "Generic\nScaleway\nAWS EC2\nOCI\nHetzner\nVodacom\nDigitalOcean\nFrappe Compute",
+			"options": "Generic\nScaleway\nAWS EC2\nOCI\nHetzner\nVodacom\nDigitalOcean\nFrappe Compute\nVultr",
 			"set_only_once": 1
 		},
 		{
@@ -231,7 +231,7 @@
 			"options": "Proxy Server Domain"
 		},
 		{
-			"depends_on": "eval:[\"AWS EC2\", \"OCI\", \"Hetzner\", \"DigitalOcean\", \"Frappe Compute\"].includes(doc.provider)",
+			"depends_on": "eval:[\"AWS EC2\", \"OCI\", \"Hetzner\", \"DigitalOcean\", \"Frappe Compute\", \"Vultr\"].includes(doc.provider)",
 			"fieldname": "virtual_machine",
 			"fieldtype": "Link",
 			"label": "Virtual Machine",

@@ -15,6 +15,10 @@ users:
 
 runcmd:
 
+{% if server.provider == 'Vultr' %}
+# Vultr's Ubuntu image ships UFW enabled with INPUT DROP; Press manages access with firewall groups
+- ufw disable
+{% endif %}
 {% if nat_gateway_ip %}
 - |
     IFACE=$(ip route show default | awk '{for(i=1;i<=NF;i++) if ($i=="dev") print $(i+1)}' | head -n 1)
@@ -45,13 +49,13 @@ runcmd:
 - su - frappe -c "cd /home/frappe/agent && env/bin/agent setup authentication --password {{ agent_password }}"
 - su - frappe -c "htpasswd -Bbc /home/frappe/agent/nginx/monitoring.htpasswd frappe {{ monitoring_password }}"
 - supervisorctl restart all
-{% if server.doctype == 'Database Server' and server.provider != 'Hetzner' and server.provider != 'DigitalOcean' %}
+{% if server.doctype == 'Database Server' and server.provider not in ('Hetzner', 'DigitalOcean', 'Vultr') %}
 - resize2fs $(findmnt /opt/volumes/mariadb --noheadings --output SOURCE)
 - systemctl daemon-reload
 - systemctl restart mariadb
 - systemctl restart mysqld_exporter
 - systemctl restart deadlock_logger
-{% elif server.doctype == 'Server' and server.provider != 'Hetzner' and server.provider != 'DigitalOcean' and server.provider != 'Frappe Compute' %}
+{% elif server.doctype == 'Server' and server.provider not in ('Hetzner', 'DigitalOcean', 'Frappe Compute', 'Vultr') %}
 - resize2fs $(findmnt /opt/volumes/benches --noheadings --output SOURCE)
 {% endif %}
 {% if server.provider == 'OCI' %}
@@ -65,14 +69,22 @@ runcmd:
     rmmod algif_aead 2>/dev/null || true
     rmmod algif_aead 2>/dev/null || true
 
-{% if server.provider == 'DigitalOcean' %}
+{% if server.provider in ('DigitalOcean', 'Vultr') %}
 - |
+{%- if server.provider == 'Vultr' %}
+    # Vultr assigns the VPC address itself; read it from the metadata service
+    for i in $(seq 1 30); do
+      PRIVATE_IP=$(curl -sf http://169.254.169.254/v1.json | python3 -c 'import json,sys; print(next(i["ipv4"]["address"] for i in json.load(sys.stdin)["interfaces"] if i.get("network-type") == "private"))' 2>/dev/null) && [ -n "$PRIVATE_IP" ] && break
+      sleep 2
+    done
+{%- else %}
     for i in {1..20}; do
       curl -sf http://169.254.169.254/metadata/v1/id && break
       sleep 1
     done
 
     PRIVATE_IP=$(curl -s http://169.254.169.254/metadata/v1/interfaces/private/0/ipv4/address)
+{%- endif %}
 
     FILES="
       /etc/systemd/system/statsd_exporter.service

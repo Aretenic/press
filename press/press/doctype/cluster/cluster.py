@@ -46,6 +46,7 @@ from press.press.doctype.virtual_machine_image.virtual_machine_image import (
 	VirtualMachineImage,
 )
 from press.utils import get_current_team, unique
+from press.vultr_client import provider as vultr
 
 if typing.TYPE_CHECKING:
 	from collections.abc import Generator
@@ -77,7 +78,9 @@ class Cluster(Document):
 		beta: DF.Check
 		by_default_select_unified_mode: DF.Check
 		cidr_block: DF.Data | None
-		cloud_provider: DF.Literal["AWS EC2", "Generic", "OCI", "Hetzner", "DigitalOcean", "Frappe Compute"]
+		cloud_provider: DF.Literal[
+			"AWS EC2", "Generic", "OCI", "Hetzner", "DigitalOcean", "Frappe Compute", "Vultr"
+		]
 		country: DF.Link | None
 		default_app_server_plan: DF.Link | None
 		default_app_server_plan_type: DF.Link | None
@@ -122,6 +125,8 @@ class Cluster(Document):
 		vpc_flow_logs_enabled: DF.Check
 		vpc_flow_logs_s3_bucket: DF.Data | None
 		vpc_id: DF.Data | None
+		vultr_api_token: DF.Password | None
+		vultr_ssh_allowed_ips: DF.SmallText | None
 	# end: auto-generated types
 
 	dashboard_fields: ClassVar[list[str]] = ["title", "image", "has_add_on_storage_support"]
@@ -185,6 +190,8 @@ class Cluster(Document):
 			self.validate_hetzner_api_token()
 		elif self.cloud_provider == "Frappe Compute":
 			self.validate_frappe_compute_credentials()
+		elif self.cloud_provider == "Vultr":
+			vultr.validate_api_token(self)
 
 	def validate_frappe_compute_credentials(self):
 		api_secret = self.get_password("frappe_compute_api_secret")
@@ -266,6 +273,8 @@ class Cluster(Document):
 			self.provision_on_digital_ocean()
 		elif self.cloud_provider == "Frappe Compute":
 			self.provision_on_frappe_compute()
+		elif self.cloud_provider == "Vultr":
+			vultr.provision_cluster(self)
 
 	def provision_on_frappe_compute(self):
 		api_secret = self.get_password("frappe_compute_api_secret")
@@ -1812,6 +1821,8 @@ class Cluster(Document):
 				self.delete_oci_firewall(firewall_id)
 			elif self.cloud_provider == "DigitalOcean":
 				self.delete_digital_ocean_firewall(firewall_id)
+			elif self.cloud_provider == "Vultr":
+				vultr.delete_firewall_group(self, firewall_id)
 		except Exception as e:
 			frappe.msgprint(f"Failed to delete firewall {firewall_id}: {e!s}")
 
@@ -2025,6 +2036,8 @@ class Cluster(Document):
 			return "cpx21"
 		if self.cloud_provider == "Frappe Compute":
 			return "CPX22"
+		if self.cloud_provider == "Vultr":
+			return vultr.DEFAULT_INSTANCE_TYPE
 		return None
 
 	def get_or_create_basic_plan(self, server_type) -> ServerPlan:

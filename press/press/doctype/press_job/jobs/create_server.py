@@ -250,8 +250,9 @@ class CreateServerJob(PressJob):
 	@task(queue="long", timeout=1200)
 	def set_docker_mtu_hetzner(self):
 		# The image ships docker on MTU 1500, which breaks traffic over Hetzner's 1450 private network
+		# (Vultr's VPC is 1450 too)
 		server = self.server_doc
-		if server.provider != "Hetzner" or server.doctype != "Server":
+		if server.provider not in ("Hetzner", "Vultr") or server.doctype != "Server":
 			return
 
 		server._set_docker_mtu(throw_on_failure=True)

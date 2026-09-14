@@ -55,7 +55,7 @@
 			"fieldtype": "Select",
 			"label": "Provider",
 			"mandatory": 1,
-			"options": "\nAWS EC2\nHetzner\nDigitalOcean",
+			"options": "\nAWS EC2\nHetzner\nDigitalOcean\nVultr",
 			"wildcard_filter": 0
 		},
 		{

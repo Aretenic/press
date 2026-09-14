@@ -48,6 +48,7 @@ from press.press.doctype.server_activity.server_activity import log_server_activ
 from press.runner import Ansible
 from press.utils import log_error
 from press.utils.jobs import has_job_timeout_exceeded
+from press.vultr_client import provider as vultr
 
 if typing.TYPE_CHECKING:
 	from press.infrastructure.doctype.virtual_machine_migration.virtual_machine_migration import (
@@ -110,7 +111,7 @@ class VirtualMachine(Document):
 
 		assign_public_ip: DF.Check
 		availability_zone: DF.Data | None
-		cloud_provider: DF.Literal["", "AWS EC2", "OCI", "Hetzner", "DigitalOcean", "Frappe Compute"]
+		cloud_provider: DF.Literal["", "AWS EC2", "OCI", "Hetzner", "DigitalOcean", "Frappe Compute", "Vultr"]
 		cluster: DF.Link
 		data_disk_snapshot: DF.Link | None
 		data_disk_snapshot_attached: DF.Check
@@ -221,8 +222,8 @@ class VirtualMachine(Document):
 		return str(ip + (256 * (2 * (index // 256) + offset) + (index % 256)) * window + additional_offset)
 
 	def validate(self):
-		# Digital ocean does not support custom private IPs in a vpc
-		if not self.private_ip_address and self.cloud_provider != "DigitalOcean":
+		# Digital Ocean and Vultr assign private IPs in a vpc themselves
+		if not self.private_ip_address and self.cloud_provider not in ("DigitalOcean", "Vultr"):
 			self.private_ip_address = self.get_private_ip()
 
 		self.validate_data_disk_snapshot()
@@ -511,6 +512,8 @@ class VirtualMachine(Document):
 			return self._provision_digital_ocean()
 		if self.cloud_provider == "Frappe Compute":
 			return self._provision_frappe_compute()
+		if self.cloud_provider == "Vultr":
+			return vultr.provision(self)
 
 		return None
 
@@ -987,7 +990,7 @@ class VirtualMachine(Document):
 			"TERMINATED": "Terminated",
 		}
 
-	def get_latest_ubuntu_image(self):
+	def get_latest_ubuntu_image(self):  # noqa: C901
 		if self.cloud_provider == "AWS EC2":
 			architecture = {"x86_64": "amd64", "arm64": "arm64"}[self.platform]
 			return self.client("ssm").get_parameter(
@@ -1027,6 +1030,9 @@ class VirtualMachine(Document):
 
 			return ubuntu_images[0]["id"]
 
+		if self.cloud_provider == "Vultr":
+			return vultr.get_latest_ubuntu_image(self)
+
 		return None
 
 	@frappe.whitelist()
@@ -1043,6 +1049,8 @@ class VirtualMachine(Document):
 			self.client().droplet_actions.post(self.instance_id, {"type": "reboot"})
 		elif self.cloud_provider == "Frappe Compute":
 			self.client().reboot_virtual_machine(instance_id=self.instance_id)
+		elif self.cloud_provider == "Vultr":
+			vultr.reboot(self)
 
 		if server := self.get_server():
 			log_server_activity(self.series, server.name, action="Reboot")
@@ -1103,6 +1111,9 @@ class VirtualMachine(Document):
 
 		elif self.cloud_provider == "Frappe Compute":
 			self.client().increase_disk_size(volume_id, volume.size)
+
+		elif self.cloud_provider == "Vultr":
+			vultr.unsupported_volume_operation()
 
 		if server := self.get_server():
 			log_server_activity(
@@ -1199,6 +1210,8 @@ class VirtualMachine(Document):
 				)
 			)
 			return volumes
+		if self.cloud_provider == "Vultr":
+			return vultr.get_volumes(self)
 		return None
 
 	def convert_to_gp3(self):
@@ -1231,6 +1244,8 @@ class VirtualMachine(Document):
 			return self._sync_digital_ocean(*args, **kwargs)
 		if self.cloud_provider == "Frappe Compute":
 			return self._sync_frappe_compute(*args, **kwargs)
+		if self.cloud_provider == "Vultr":
+			return vultr.sync(self)
 		return None
 
 	def _update_volume_info_after_sync(self, hetzner_server_instance=None):
@@ -1561,6 +1576,7 @@ class VirtualMachine(Document):
 			"Hetzner": lambda v: v.device == "/dev/sda",
 			"DigitalOcean": lambda v: v.device == "/dev/sda",
 			"Frappe Compute": lambda v: v.device == "/dev/vda",
+			"Vultr": lambda v: v.device == vultr.VULTR_ROOT_DEVICE,
 		}
 		root_volume_filter = ROOT_VOLUME_FILTERS.get(self.cloud_provider)
 		volume = find(self.volumes, root_volume_filter)
@@ -1582,6 +1598,9 @@ class VirtualMachine(Document):
 			"OCI": lambda v: ".bootvolume." not in v.volume_id and v.device not in temporary_volume_devices,
 			"Hetzner": lambda v: v.device != "/dev/sda" and v.device not in temporary_volume_devices,
 			"DigitalOcean": lambda v: v.device != "/dev/sda" and v.device not in temporary_volume_devices,
+			"Vultr": lambda v: (
+				v.device != vultr.VULTR_ROOT_DEVICE and v.device not in temporary_volume_devices
+			),
 		}
 		data_volume_filter = DATA_VOLUME_FILTERS.get(self.cloud_provider)
 		volume = find(self.volumes, data_volume_filter)
@@ -2214,6 +2233,8 @@ class VirtualMachine(Document):
 			self.client().droplet_actions.post(self.instance_id, {"type": "power_on"})
 		elif self.cloud_provider == "Frappe Compute":
 			self.client().start_virtual_machine(instance_id=self.instance_id)
+		elif self.cloud_provider == "Vultr":
+			vultr.start(self)
 
 		# Digital Ocean `start` takes some time therefore this sync is useless for DO.
 		self.sync()
@@ -2230,6 +2251,8 @@ class VirtualMachine(Document):
 			self.client().droplet_actions.post(self.instance_id, {"type": "power_off"})
 		elif self.cloud_provider == "Frappe Compute":
 			self.client().stop_virtual_machine(self.instance_id, force=False)
+		elif self.cloud_provider == "Vultr":
+			vultr.stop(self)
 		self.sync()
 
 	@frappe.whitelist()
@@ -2272,6 +2295,8 @@ class VirtualMachine(Document):
 			self.client().droplets.destroy(self.instance_id)
 		elif self.cloud_provider == "Frappe Compute":
 			self.client().terminate_virtual_machine(instance_id=self.instance_id)
+		elif self.cloud_provider == "Vultr":
+			vultr.terminate(self)
 
 		if server := self.get_server():
 			log_server_activity(self.series, server.name, action="Terminated", reason=reason)
@@ -2339,6 +2364,8 @@ class VirtualMachine(Document):
 			self.client().resize_virtual_machine(
 				self.instance_id, machine_type=machine_type, upgrade_disk=upgrade_disk
 			)
+		elif self.cloud_provider == "Vultr":
+			vultr.resize(self, machine_type)
 
 		self.machine_type = machine_type
 		self.save()
@@ -2413,6 +2440,9 @@ class VirtualMachine(Document):
 				api_key=cluster.frappe_compute_api_key,
 				api_secret=cluster.get_password("frappe_compute_api_secret"),
 			)
+
+		if self.cloud_provider == "Vultr":
+			return vultr.get_client(cluster)
 
 		return None
 
@@ -3250,6 +3280,9 @@ class VirtualMachine(Document):
 
 				self.client().volumes.delete(Volume(id=cint(volume_id)))
 
+			if self.cloud_provider == "Vultr":
+				vultr.unsupported_volume_operation()
+
 			if self.cloud_provider == "DigitalOcean":
 				if volume_id == DIGITALOCEAN_ROOT_DISK_ID:
 					frappe.throw(
@@ -3305,6 +3338,7 @@ def sync_virtual_machines():
 	VirtualMachine.bulk_sync_aws()
 	VirtualMachine.bulk_sync_oci()
 	VirtualMachine.bulk_sync_hetzner()
+	vultr.bulk_sync()
 
 
 def snapshot_oci_virtual_machines():

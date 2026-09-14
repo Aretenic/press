@@ -65,7 +65,7 @@ class ProxyServer(BaseServer):
 		private_mac_address: DF.Data | None
 		private_vlan_id: DF.Data | None
 		provider: DF.Literal[
-			"Generic", "Scaleway", "AWS EC2", "OCI", "Hetzner", "Vodacom", "DigitalOcean", "Frappe Compute"
+			"Generic", "Scaleway", "AWS EC2", "OCI", "Hetzner", "Vodacom", "DigitalOcean", "Frappe Compute", "Vultr"
 		]
 		proxysql_admin_password: DF.Password | None
 		proxysql_monitor_password: DF.Password | None

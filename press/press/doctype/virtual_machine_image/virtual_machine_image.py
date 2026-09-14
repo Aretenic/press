@@ -21,6 +21,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 from tenacity.retry import retry_if_result
 
 from press.frappe_compute_client.client import Client as FrappeComputeClient
+from press.vultr_client import provider as vultr
 
 
 class VirtualMachineImage(Document):
@@ -142,6 +143,9 @@ class VirtualMachineImage(Document):
 
 		elif cluster.cloud_provider == "Frappe Compute":
 			self.image_id = self.client.create_virtual_machine_image(self.instance_id)
+
+		elif cluster.cloud_provider == "Vultr":
+			vultr.create_image(self)
 
 		self.sync()
 
@@ -278,6 +282,8 @@ class VirtualMachineImage(Document):
 			self.root_size = image.size
 			self.size = image.size
 			self.status = image.status
+		elif cluster.cloud_provider == "Vultr":
+			vultr.sync_image(self)
 		self.save()
 		return self.status
 
@@ -310,6 +316,8 @@ class VirtualMachineImage(Document):
 			from hcloud.images.domain import Image
 
 			self.client.images.delete(Image(self.image_id))
+		elif cluster.cloud_provider == "Vultr":
+			vultr.delete_image(self)
 		self.sync()
 
 	def get_aws_status_map(self, status):
