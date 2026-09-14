@@ -1,5 +1,8 @@
 ######## W E L C O M E #########
 Welcome to {{ warning_banner_organization | default('Frappe Technologies Pvt Ltd') }}
 This server is under authority of {{ warning_banner_organization | default('Frappe Technologies Pvt Ltd') }}
-If you came accross any issue, contact us at {{ warning_banner_contact | default('devops@erpnext.com') }}
-
+{% if warning_banner_contact is defined %}
+If you came accross any issue, contact us at {{ warning_banner_contact }}
+{% elif warning_banner_organization is not defined %}
+If you came accross any issue, contact us at devops@erpnext.com
+{% endif %}
