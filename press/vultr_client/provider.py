@@ -31,9 +31,12 @@ VULTR_ROOT_DEVICE = "/dev/vda"
 UBUNTU_IMAGE_NAME = "Ubuntu 22.04 LTS x64"  # Press's Ansible pins 22.04
 DEFAULT_INSTANCE_TYPE = "vhp-2c-4gb-amd"
 
+# Vultr's Ubuntu image ships UFW enabled and a `linuxuser` account holding uid 1000, which
+# Press's `user` role needs for `frappe`
 PLAIN_IMAGE_CLOUD_INIT = """#cloud-config
 runcmd:
 - ufw disable
+- userdel -r linuxuser || true
 """
 
 
