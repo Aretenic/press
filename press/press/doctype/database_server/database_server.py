@@ -128,7 +128,15 @@ class DatabaseServer(BaseServer):
 		private_mac_address: DF.Data | None
 		private_vlan_id: DF.Data | None
 		provider: DF.Literal[
-			"Generic", "Scaleway", "AWS EC2", "OCI", "Hetzner", "Vodacom", "DigitalOcean", "Frappe Compute", "Vultr"
+			"Generic",
+			"Scaleway",
+			"AWS EC2",
+			"OCI",
+			"Hetzner",
+			"Vodacom",
+			"DigitalOcean",
+			"Frappe Compute",
+			"Vultr",
 		]
 		public: DF.Check
 		ram: DF.Float
@@ -2479,6 +2487,11 @@ systemctl restart mariadb
 		)
 
 	def _sync_binlogs_info(self, index_binlogs: bool = True, upload_binlogs: bool = True):
+		from press.r2.storage import is_enabled as r2_enabled
+
+		if upload_binlogs and self.enable_binlog_upload_to_s3 and r2_enabled():
+			# Rotate hourly instead of at max_binlog_size, so each run uploads the last hour
+			self.agent.flush_binlogs(self)
 		info = self.agent.fetch_binlog_list()
 		current_binlog = info.get("current_binlog", "")
 		binlogs_in_disk = info.get("binlogs_in_disk", [])

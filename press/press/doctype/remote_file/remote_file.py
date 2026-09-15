@@ -82,7 +82,9 @@ def poll_file_statuses():
 	# Never a site's own bucket: this job deletes every object it has no Remote File for, and a
 	# school's buckets hold objects Press does not track (ADR 041)
 	for b in frappe.get_all(
-		"Backup Bucket", {"site": ("is", "not set")}, ["bucket_name", "cluster", "region"]
+		"Backup Bucket",
+		{"site": ("is", "not set"), "purpose": ("in", ("Cluster Backups", "", None))},
+		["bucket_name", "cluster", "region"],
 	):
 		buckets.append(
 			{

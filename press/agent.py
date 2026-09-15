@@ -1658,7 +1658,9 @@ Response: {reason or getattr(result, "text", "Unknown")}
 			return NotImplementedError("Only Database Server supports this method")
 
 		cluster = frappe.get_value("Database Server", self.server, "cluster")
-		offsite_config = self._get_offsite_backup_config(cluster, backups_path=self.server)
+		offsite_config = self._get_binlog_offsite_config(cluster) or self._get_offsite_backup_config(
+			cluster, backups_path=self.server
+		)
 
 		return self.create_agent_job(
 			"Upload Binlogs To S3",
@@ -1751,6 +1753,36 @@ Response: {reason or getattr(result, "text", "Unknown")}
 				"private_ip": database_server.private_ip,
 				"mariadb_root_password": database_server.get_password("mariadb_root_password"),
 				"to_binlog": to_binlog,
+			},
+		)
+
+	def _get_binlog_offsite_config(self, cluster: str) -> dict | None:
+		"""The cluster's own R2 binlog bucket and key (ADR 041), or None without tenant storage."""
+		from press.press.doctype.backup_bucket.backup_bucket import get_bucket_credentials
+		from press.r2.storage import get_cluster_binlog_bucket
+
+		bucket = get_cluster_binlog_bucket(cluster)
+		if not bucket:
+			return None
+		credentials = get_bucket_credentials(bucket)
+		return {
+			"bucket": bucket,
+			"auth": {
+				"ACCESS_KEY": credentials["access_key_id"],
+				"SECRET_KEY": credentials["secret_access_key"],
+				"REGION": credentials["region"],
+				"ENDPOINT_URL": credentials["endpoint_url"],
+			},
+			"path": self.server,
+		}
+
+	def flush_binlogs(self, database_server: DatabaseServer):
+		"""Close the current binlog so the hourly upload can send it (ADR 041 §7, RPO 1 h)."""
+		return self.post(
+			"database/binlogs/flush",
+			data={
+				"private_ip": database_server.private_ip,
+				"mariadb_root_password": database_server.get_password("mariadb_root_password"),
 			},
 		)
 

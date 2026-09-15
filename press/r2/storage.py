@@ -90,28 +90,50 @@ def ensure_site_storage(site: Site) -> None:
 
 def _ensure_bucket(client: Client, site: Site, purpose: str, locations: dict) -> str:
 	kind = SUFFIX[purpose]
-	hint = locations[kind]
 	# In Site.before_insert the document has no name yet: Frappe names it after before_insert
 	site_name = site.name or site._get_site_name(site.subdomain)
+	return ensure_bucket(
+		client,
+		base_name=f"{site.subdomain}-{kind}",
+		purpose=purpose,
+		hint=locations[kind],
+		cluster=site.cluster,
+		site=site_name,
+		locked=purpose == "Site Backups",
+		avoid_location=locations["media"] if purpose == "Site Backups" else None,
+	)
+
+
+def ensure_bucket(
+	client: Client,
+	base_name: str,
+	purpose: str,
+	hint: str,
+	cluster: str,
+	site: str | None,
+	locked: bool,
+	avoid_location: str | None,
+) -> str:
+	"""Create (or adopt) one bucket with its row and its own key. Idempotent; see module docstring."""
 	for attempt in range(1, 10):
-		name = f"{site.subdomain}-{kind}" if attempt == 1 else f"{site.subdomain}-{kind}-{attempt}"
-		row = frappe.db.get_value("Backup Bucket", name, ["site", "purpose"], as_dict=True)
-		if row and (row.site != site_name or row.purpose != purpose):
-			continue  # belongs to another site, archived or not: never reuse it
+		name = base_name if attempt == 1 else f"{base_name}-{attempt}"
+		row = frappe.db.get_value("Backup Bucket", name, ["site", "purpose", "cluster"], as_dict=True)
+		if row and (row.site != site or row.purpose != purpose or (not site and row.cluster != cluster)):
+			continue  # belongs to another owner, archived or not: never reuse it
 		# Created now, ours from an earlier try (row), or left over from an interrupted run (no row)
 		client.create_bucket(name, hint)
 		break
 	else:
-		frappe.throw(f"No free R2 bucket name for {site_name} ({kind})")
+		frappe.throw(f"No free R2 bucket name for {base_name}")
 
 	info = client.get_bucket(name) or {}
 	location = (info.get("location") or "").lower()
-	if purpose == "Site Backups":
-		if location == locations["media"]:
-			frappe.throw(
-				f"R2 placed backup bucket {name} in {location}, the school's own location. "
-				"ADR 041 §2 requires another region: move or recreate it by hand."
-			)
+	if avoid_location and location == avoid_location:
+		frappe.throw(
+			f"R2 placed {purpose.lower()} bucket {name} in {location}, the cluster's own location. "
+			"ADR 041 §2 requires another region: move or recreate it by hand."
+		)
+	if locked:
 		_ensure_lock(client, name)
 
 	if not row:
@@ -120,8 +142,8 @@ def _ensure_bucket(client: Client, site: Site, purpose: str, locations: dict) ->
 				"doctype": "Backup Bucket",
 				"bucket_name": name,
 				"purpose": purpose,
-				"site": site_name,
-				"cluster": site.cluster,
+				"site": site,
+				"cluster": cluster,
 				"region": "auto",
 				"endpoint_url": client.s3_endpoint,
 				"location": location,
@@ -145,6 +167,28 @@ def _ensure_bucket(client: Client, site: Site, purpose: str, locations: dict) ->
 		bucket_doc.flags.ignore_links = True
 		bucket_doc.save(ignore_permissions=True)
 	return name
+
+
+def get_cluster_binlog_bucket(cluster: str) -> str | None:
+	"""`binlogs-<cluster>`, away from the cluster and locked, created on first use (ADR 041 §1)."""
+	if not is_enabled():
+		return None
+	existing = frappe.db.get_value("Backup Bucket", {"purpose": "Binlogs", "cluster": cluster})
+	if existing and frappe.db.get_value("Backup Bucket", existing, "access_key_id"):
+		return existing
+	locations = LOCATIONS.get(cluster)
+	if not locations:
+		frappe.throw(f"No R2 locations are defined for cluster {cluster} (press/r2/storage.py)")
+	return ensure_bucket(
+		get_client(),
+		base_name=f"binlogs-{cluster}",
+		purpose="Binlogs",
+		hint=locations["backups"],
+		cluster=cluster,
+		site=None,
+		locked=True,
+		avoid_location=locations["media"],
+	)
 
 
 def _ensure_lock(client: Client, bucket: str) -> None:
