@@ -2056,6 +2056,10 @@ Response: {reason or getattr(result, "text", "Unknown")}
 					"ENDPOINT_URL": credentials["endpoint_url"],
 				},
 				"path": backups_path,
+				# App servers encrypt site_config to this public key before upload (ADR 041 §5)
+				"config_age_recipient": frappe.db.get_single_value(
+					"Press Settings", "r2_config_age_recipient"
+				),
 			}
 
 		settings = frappe.get_single("Press Settings")

@@ -343,7 +343,13 @@ class RemoteFile(Document):
 			return json.loads(requests.get(self.url).content)
 
 		obj = self.s3_client.get_object(Bucket=self.bucket, Key=self.file_path)
-		return json.loads(obj["Body"].read().decode("utf-8"))
+		data = obj["Body"].read()
+
+		from press.r2.config_encryption import decrypt, is_encrypted
+
+		if is_encrypted(self.file_path):
+			data = decrypt(data)  # site_config uploaded encrypted (ADR 041 §5)
+		return json.loads(data.decode("utf-8"))
 
 	@property
 	def size(self) -> int:

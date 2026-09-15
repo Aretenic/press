@@ -210,6 +210,7 @@ class PressSettings(Document):
 		pulse_site: DF.Data | None
 		r2_account_id: DF.Data | None
 		r2_api_token: DF.Password | None
+		r2_config_age_recipient: DF.Data | None
 		r2_press_access_key_id: DF.Data | None
 		r2_press_secret_access_key: DF.Password | None
 		raven_access_key_id: DF.Data | None

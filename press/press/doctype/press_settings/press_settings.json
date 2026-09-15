@@ -83,6 +83,7 @@
 		"column_break_r2",
 		"r2_press_access_key_id",
 		"r2_press_secret_access_key",
+		"r2_config_age_recipient",
 		"backups_section",
 		"backup_interval",
 		"backup_offset",
@@ -1939,11 +1940,17 @@
 			"fieldtype": "Password",
 			"label": "R2 Press Secret Access Key",
 			"read_only": 1
+		},
+		{
+			"description": "age X25519 recipient (age1...). When set, app servers encrypt site_config before upload; the private key stays in a file on the Press host (ADR 041 §5).",
+			"fieldname": "r2_config_age_recipient",
+			"fieldtype": "Data",
+			"label": "Config Backup age Public Key"
 		}
 	],
 	"issingle": 1,
 	"links": [],
-	"modified": "2026-09-15 17:30:00.000000",
+	"modified": "2026-09-15 20:30:00.000000",
 	"modified_by": "Administrator",
 	"module": "Press",
 	"name": "Press Settings",

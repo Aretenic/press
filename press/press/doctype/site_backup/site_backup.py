@@ -493,7 +493,9 @@ def track_offsite_backups(
 						"file_name": file_name,
 						"file_path": file_path,
 						"file_size": file_size,
-						"file_type": file_types.get(type, "application/x-tar"),
+						"file_type": "application/octet-stream"
+						if file_path.endswith(".age")
+						else file_types.get(type, "application/x-tar"),
 						"bucket": bucket,
 					}
 				)
