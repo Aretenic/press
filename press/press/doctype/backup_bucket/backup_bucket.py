@@ -22,7 +22,7 @@ class BackupBucket(Document):
 		endpoint_url: DF.Data | None
 		location: DF.Data | None
 		media_missing: DF.JSON | None
-		purpose: DF.Literal["Cluster Backups", "Site Backups", "Site Media", "Binlogs"]
+		purpose: DF.Literal["Cluster Backups", "Site Backups", "Site Media", "Binlogs", "Control Plane"]
 		region: DF.Data | None
 		replication_bucket: DF.Data | None
 		replication_enabled: DF.Check
