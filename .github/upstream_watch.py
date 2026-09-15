@@ -53,7 +53,11 @@ COSMETIC_RE = re.compile(r"^(style|test|docs|chore|ci)(\(|!|:)", re.I)
 
 
 def run(*args: str, cwd: str | None = None) -> str:
-	return subprocess.run(args, cwd=cwd, capture_output=True, text=True, check=True).stdout.strip()
+	result = subprocess.run(args, cwd=cwd, capture_output=True, text=True, check=False)
+	if result.returncode:
+		# Without this, a failure reaches the workflow log as a bare exit status
+		raise subprocess.CalledProcessError(result.returncode, args, result.stdout, result.stderr.strip())
+	return result.stdout.strip()
 
 
 def clone(repo: dict, directory: str) -> str:
@@ -205,7 +209,10 @@ def main() -> None:
 	with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as handle:
 		handle.write(body)
 		body_file = handle.name
-	print(run("gh", "issue", "create", "--repo", ISSUE_REPO, "--title", title, "--label", ISSUE_LABEL, "--body-file", body_file))
+	try:
+		print(run("gh", "issue", "create", "--repo", ISSUE_REPO, "--title", title, "--label", ISSUE_LABEL, "--body-file", body_file))
+	except subprocess.CalledProcessError as error:
+		raise SystemExit(f"could not open the digest issue: {error.stderr or error.output}") from error
 
 
 if __name__ == "__main__":
