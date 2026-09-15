@@ -125,6 +125,7 @@ class Cluster(Document):
 		vpc_flow_logs_enabled: DF.Check
 		vpc_flow_logs_s3_bucket: DF.Data | None
 		vpc_id: DF.Data | None
+		vultr_agent_allowed_ips: DF.SmallText | None
 		vultr_api_token: DF.Password | None
 		vultr_ssh_allowed_ips: DF.SmallText | None
 	# end: auto-generated types

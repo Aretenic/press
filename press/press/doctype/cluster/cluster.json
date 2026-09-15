@@ -48,6 +48,7 @@
 		"vultr_section",
 		"vultr_api_token",
 		"vultr_ssh_allowed_ips",
+		"vultr_agent_allowed_ips",
 		"oci_section",
 		"oci_user",
 		"oci_public_key",
@@ -445,10 +446,16 @@
 			"label": "Vultr API Key"
 		},
 		{
-			"description": "Public IPv4 addresses or CIDRs allowed to reach SSH (port 22) on servers, one per line. Include the Press host. Leave empty to allow SSH from anywhere.",
+			"description": "Public IPv4 addresses or CIDRs allowed to reach SSH (port 22) on all servers, one per line. Include the Press host and the operator. Leave empty to allow SSH from anywhere.",
 			"fieldname": "vultr_ssh_allowed_ips",
 			"fieldtype": "Small Text",
 			"label": "SSH Allowed From"
+		},
+		{
+			"description": "Public IPv4 addresses or CIDRs allowed to reach the agent (port 443) on app and database servers, one per line. Set to the Press host only. The proxy serves 443 to everyone. Leave empty to allow from anywhere.",
+			"fieldname": "vultr_agent_allowed_ips",
+			"fieldtype": "Small Text",
+			"label": "Agent Allowed From"
 		},
 		{
 			"fieldname": "database_section",
@@ -576,7 +583,7 @@
 			"link_fieldname": "document_name"
 		}
 	],
-	"modified": "2026-06-27 16:31:41.451282",
+	"modified": "2026-09-15 07:32:01.917927",
 	"modified_by": "Administrator",
 	"module": "Press",
 	"name": "Cluster",

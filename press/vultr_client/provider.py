@@ -79,8 +79,8 @@ def provision_cluster(cluster: Cluster) -> None:
 	ensure_ssh_key(client, cluster.ssh_key)
 
 	try:
-		cluster.security_group_id = _create_firewall_group(client, cluster, "Servers")
-		cluster.proxy_security_group_id = _create_firewall_group(client, cluster, "Proxy")
+		cluster.security_group_id = _create_firewall_group(client, cluster, "Servers", proxy=False)
+		cluster.proxy_security_group_id = _create_firewall_group(client, cluster, "Proxy", proxy=True)
 		cluster.save()
 	except VultrAPIError as e:
 		frappe.throw(f"Failed to provision firewall groups on Vultr: {e.message}")
@@ -96,16 +96,28 @@ def ensure_ssh_key(client: Client, ssh_key: str) -> str:
 	return client.create_ssh_key(ssh_key, public_key)["id"]
 
 
-def _create_firewall_group(client: Client, cluster: Cluster, role: str) -> str:
+def _create_firewall_group(client: Client, cluster: Cluster, role: str, proxy: bool) -> str:
 	group = client.create_firewall_group(f"Press {cluster.name} - {role}")
-	for rule in _firewall_rules(cluster):
+	for rule in _firewall_rules(cluster, proxy=proxy):
 		client.create_firewall_rule(group["id"], rule)
 	return group["id"]
 
 
-def _firewall_rules(cluster: Cluster) -> list[dict]:
-	"""Inbound rules. Unlike upstream Press's other providers, SSH is not opened to the world when
-	`vultr_ssh_allowed_ips` is set, and the proxy does not expose MariaDB (3306) publicly."""
+def _sources(value: str | None) -> list[str]:
+	return [ip.strip() for ip in (value or "").splitlines() if ip.strip()]
+
+
+def _firewall_rules(cluster: Cluster, proxy: bool) -> list[dict]:
+	"""Inbound IPv4 rules for one role. Servers run with IPv6 disabled, so there are no IPv6 rules and
+	Vultr drops IPv6 traffic.
+
+	- Proxy: 80 and 443 from anywhere (sites, and the agent behind nginx on 443).
+	- Servers (app, database): no public web ports. School traffic reaches them through the proxy on
+	their private IPs; publicly they answer only the agent on 443, from `vultr_agent_allowed_ips`.
+	- Both: SSH from `vultr_ssh_allowed_ips`, and ICMP.
+
+	An empty address list falls back to anywhere, matching upstream Press's other providers.
+	Production clusters set both lists (ADR 042)."""
 
 	def rule(protocol, subnet, port=None, notes=""):
 		network = ipaddress.ip_network(subnet, strict=False)
@@ -120,18 +132,28 @@ def _firewall_rules(cluster: Cluster) -> list[dict]:
 			r["port"] = port
 		return r
 
+	anywhere = ["0.0.0.0/0"]
+	ssh_sources = _sources(cluster.vultr_ssh_allowed_ips) or anywhere
+	agent_sources = _sources(cluster.vultr_agent_allowed_ips) or anywhere
+
+	rules = [rule("icmp", "0.0.0.0/0", notes="ICMP")]
+	if proxy:
+		rules += [
+			rule("tcp", "0.0.0.0/0", "80", "HTTP"),
+			rule("tcp", "0.0.0.0/0", "443", "HTTPS and agent"),
+		]
+	else:
+		rules += [rule("tcp", source, "443", "Agent from Press") for source in agent_sources]
+	rules += [rule("tcp", source, "22", "SSH") for source in ssh_sources]
+
+	# Documentation only: Vultr firewall groups do not filter traffic inside the VPC.
 	private = cluster.subnet_cidr_block or cluster.cidr_block
-	ssh_sources = [ip.strip() for ip in (cluster.vultr_ssh_allowed_ips or "").splitlines() if ip.strip()]
-	rules = [
-		rule("tcp", "0.0.0.0/0", "80", "HTTP"),
-		rule("tcp", "0.0.0.0/0", "443", "HTTPS"),
-		rule("icmp", "0.0.0.0/0", notes="ICMP"),
+	rules += [
 		rule("tcp", private, "3306", "MariaDB from private network"),
 		rule("tcp", private, "2049", "NFS from private network"),
 		rule("tcp", private, "11000:20000", "Redis from private network"),
 		rule("tcp", private, "22000:22999", "SSH from private network"),
 	]
-	rules += [rule("tcp", source, "22", "SSH") for source in (ssh_sources or ["0.0.0.0/0"])]
 	return rules
 
 
