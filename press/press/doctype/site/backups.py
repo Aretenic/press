@@ -18,6 +18,8 @@ from press.press.doctype.remote_file.remote_file import delete_remote_backup_obj
 from press.press.doctype.site.site import Literal, Site
 from press.press.doctype.site_backup.site_backup import SiteBackup
 from press.press.doctype.subscription.subscription import Subscription
+from press.r2.retention import cleanup_offsite as r2_cleanup_offsite
+from press.r2.retention import has_r2_backups, logical_backup_plan
 from press.utils import log_error
 
 
@@ -151,8 +153,11 @@ class FIFO(BackupRotationScheme):
 	def get_backups_due_for_expiry(self, backup_type: BACKUP_TYPES) -> list[str]:
 		offsite_expiry = self.offsite_backups_count
 		to_be_expired_backups = []
-		sites = frappe.get_all("Site", {"status": ("!=", "Archived")}, pluck="name")
+		sites = frappe.get_all("Site", {"status": ("!=", "Archived")}, ["name", "r2_backup_bucket"])
 		for site in sites:
+			if backup_type == "Logical" and site.r2_backup_bucket:
+				continue  # rotated by press.r2.retention
+			site = site.name
 			to_be_expired_backups += frappe.get_all(
 				"Site Backup",
 				filters={
@@ -189,6 +194,8 @@ class GFS(BackupRotationScheme):
 		oldest_weekly = today - timedelta(weeks=4)
 		oldest_monthly = today - timedelta(days=366)
 		oldest_yearly = today - timedelta(days=3653)
+		# Logical backups of sites with an R2 backup bucket are rotated by press.r2.retention
+		skip_r2_sites = "ifnull(r2_backup_bucket, '') = '' and" if backup_type == "Logical" else ""
 		backups = frappe.db.sql(
 			f"""
 			SELECT name from `tabSite Backup`
@@ -196,6 +203,7 @@ class GFS(BackupRotationScheme):
 				site in (
 						select name from tabSite
 						where status != "Archived" and
+						{skip_r2_sites}
 						(cluster is null or cluster not in (
 								select name from tabCluster where status = "Archived"
 						))
@@ -331,6 +339,9 @@ class ScheduledBackupJob:
 				with_files = self.backup_type == "Logical" and (
 					offsite or not SiteBackup.file_backup_exists(site.name, today)
 				)
+				if self.backup_type == "Logical" and has_r2_backups(site.name):
+					# Every backup offsite, files once a day (ADR 041 §1)
+					offsite, with_files = logical_backup_plan(site.name, today)
 
 				frappe.get_doc("Site", site.name).backup(
 					with_files=with_files,
@@ -374,9 +385,12 @@ def schedule_logical_backups_for_sites_with_backup_time():
 	sites_without_offsite = Subscription.get_sites_without_offsite_backups()
 	for site in sites:
 		offsite = should_take_offsite_backup(site.name, day, offsite_setup, sites_without_offsite)
+		with_files = offsite or not SiteBackup.file_backup_exists(site.name, day)
+		if has_r2_backups(site.name):
+			offsite, with_files = logical_backup_plan(site.name, day)
 		site_doc: Site = frappe.get_doc("Site", site.name)
 		site_doc.backup(
-			with_files=offsite or not SiteBackup.file_backup_exists(site.name, day),
+			with_files=with_files,
 			offsite=offsite,
 			physical=False,
 		)
@@ -418,6 +432,10 @@ def _cleanup_offsite():
 	elif scheme == "Grandfather-father-son":
 		rotation = GFS()
 	rotation.cleanup_offsite()
+	frappe.db.commit()
+
+	# Sites with their own R2 backup bucket follow ADR 041's retention instead
+	r2_cleanup_offsite()
 	frappe.db.commit()
 
 
