@@ -57,6 +57,7 @@ def run(now: datetime | None = None) -> dict:
 	now = now or datetime.now(timezone.utc)
 	try:
 		bucket = get_control_plane_bucket()
+		frappe.db.commit()  # the dump runs on its own connection: a new bucket's row must be in it
 		uploaded = upload_backup(bucket, now)
 		deleted = expire(bucket, now)
 	except Exception:
