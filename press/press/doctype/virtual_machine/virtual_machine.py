@@ -46,7 +46,7 @@ from press.frappe_compute_client.client import Client as FrappeComputeClient
 from press.overrides import get_permission_query_conditions_for_doctype
 from press.press.doctype.server_activity.server_activity import log_server_activity
 from press.runner import Ansible
-from press.utils import log_error
+from press.utils import get_agent_press_url, log_error
 from press.utils.jobs import has_job_timeout_exceeded
 from press.vultr_client import provider as vultr
 
@@ -885,6 +885,10 @@ class VirtualMachine(Document):
 				is_path=True,
 			),
 			"is_unified_server": getattr(server, "is_unified_server", False),
+			"press_url": get_agent_press_url(),
+			"proxy_ip": server.get_proxy_ip()
+			if server.doctype == "Server" and getattr(server, "proxy_server", None)
+			else None,
 			"nat_gateway_ip": server.get_nat_gateway_ip() if not self.assign_public_ip else None,
 		}
 		if server.doctype == "Database Server" or getattr(server, "is_unified_server", False):

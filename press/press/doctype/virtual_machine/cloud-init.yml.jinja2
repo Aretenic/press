@@ -45,7 +45,12 @@ runcmd:
 - rm -rf /etc/ssh/ca.pub /etc/ssh/auth_principals
 - systemctl reload ssh || true
 {% endif %}
-- su - frappe -c "cd /home/frappe/agent && env/bin/agent setup config --name {{ server.name }} --workers 2"
+{#- Aretenic: `agent setup config` rewrites config.json from defaults, so pass everything the setup play
+    would have set, or clones report to frappecloud.com, lose the proxy's domain and the proxy_ip. #}
+- su - frappe -c "cd /home/frappe/agent && env/bin/agent setup config --name {{ server.name }} --workers 2 --press-url {{ press_url }}{% if proxy_ip %} --proxy-ip {{ proxy_ip }}{% endif %}"
+{% if server.doctype == 'Proxy Server' %}
+- su - frappe -c "cd /home/frappe/agent && env/bin/agent setup proxy --domain {{ server.domain }} --press-url {{ press_url }}"
+{% endif %}
 - su - frappe -c "cd /home/frappe/agent && env/bin/agent setup authentication --password {{ agent_password }}"
 - su - frappe -c "htpasswd -Bbc /home/frappe/agent/nginx/monitoring.htpasswd frappe {{ monitoring_password }}"
 - supervisorctl restart all
