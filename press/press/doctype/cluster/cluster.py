@@ -194,6 +194,18 @@ class Cluster(Document):
 		elif self.cloud_provider == "Vultr":
 			vultr.validate_api_token(self)
 
+	def on_update(self):
+		if (
+			self.cloud_provider == "Vultr"
+			and not self.is_new()
+			and (self.security_group_id or self.proxy_security_group_id)
+			and (
+				self.has_value_changed("vultr_ssh_allowed_ips")
+				or self.has_value_changed("vultr_agent_allowed_ips")
+			)
+		):
+			vultr.sync_firewall_rules(self)
+
 	def validate_frappe_compute_credentials(self):
 		api_secret = self.get_password("frappe_compute_api_secret")
 

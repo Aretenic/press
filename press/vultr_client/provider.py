@@ -157,6 +157,35 @@ def _firewall_rules(cluster: Cluster, proxy: bool) -> list[dict]:
 	return rules
 
 
+def sync_firewall_rules(cluster: Cluster) -> None:
+	"""Bring the cluster's existing firewall groups in line with `_firewall_rules`, so a change to
+	`vultr_ssh_allowed_ips` or `vultr_agent_allowed_ips` reaches running servers. Missing rules are
+	added before stale ones are removed, so access is never narrower than both old and new sets."""
+	client = get_client(cluster)
+
+	def key(rule: dict) -> tuple:
+		return (
+			rule["ip_type"],
+			rule["protocol"],
+			str(rule.get("port") or ""),
+			rule["subnet"],
+			int(rule["subnet_size"]),
+		)
+
+	for group_id, proxy in ((cluster.security_group_id, False), (cluster.proxy_security_group_id, True)):
+		if not group_id:
+			continue
+		wanted = {key(rule): rule for rule in _firewall_rules(cluster, proxy=proxy)}
+		existing = client.list_firewall_rules(group_id)
+		present = {key(rule) for rule in existing}
+		for rule_key, rule in wanted.items():
+			if rule_key not in present:
+				client.create_firewall_rule(group_id, rule)
+		for rule in existing:
+			if key(rule) not in wanted:
+				client.delete_firewall_rule(group_id, rule["id"])
+
+
 def delete_firewall_group(cluster: Cluster, group_id: str) -> None:
 	try:
 		get_client(cluster).delete_firewall_group(group_id)

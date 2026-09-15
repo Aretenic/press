@@ -37,9 +37,16 @@ class Client:
 
 	def request(self, method: str, path: str, body: dict | None = None, params: dict | None = None) -> dict:
 		for attempt in range(1, MAX_ATTEMPTS + 1):
-			response = self.session.request(
-				method, BASE_URL + path, json=body, params=params, timeout=TIMEOUT
-			)
+			try:
+				response = self.session.request(
+					method, BASE_URL + path, json=body, params=params, timeout=TIMEOUT
+				)
+			except (requests.Timeout, requests.ConnectionError):
+				# Only reads are retried: a POST that timed out may still have created the resource.
+				if method != "GET" or attempt == MAX_ATTEMPTS:
+					raise
+				time.sleep(min(2**attempt, 30))
+				continue
 			if response.status_code in RETRY_STATUSES and attempt < MAX_ATTEMPTS:
 				time.sleep(min(2**attempt, 30))
 				continue
@@ -101,6 +108,9 @@ class Client:
 
 	def create_firewall_rule(self, group_id: str, rule: dict) -> dict:
 		return self.request("POST", f"/firewalls/{group_id}/rules", rule)["firewall_rule"]
+
+	def delete_firewall_rule(self, group_id: str, rule_id: int) -> None:
+		self.request("DELETE", f"/firewalls/{group_id}/rules/{rule_id}")
 
 	# Instances
 	def create_instance(self, body: dict) -> dict:
