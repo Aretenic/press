@@ -140,3 +140,30 @@ class Client:
 
 def s3_endpoint(account_id: str) -> str:
 	return f"https://{account_id}.r2.cloudflarestorage.com"
+
+
+def wait_until_usable(
+	account_id: str, access_key_id: str, secret: str, bucket: str, timeout: int = 90
+) -> None:
+	"""A minted key is refused (Unauthorized) for a few seconds. Wait until it lists `bucket`."""
+	import boto3
+	from botocore.exceptions import ClientError
+
+	s3 = boto3.client(
+		"s3",
+		aws_access_key_id=access_key_id,
+		aws_secret_access_key=secret,
+		endpoint_url=s3_endpoint(account_id),
+		region_name="auto",
+	)
+	deadline = time.monotonic() + timeout
+	while True:
+		try:
+			s3.list_objects_v2(Bucket=bucket, MaxKeys=1)
+			return
+		except ClientError as e:
+			if e.response["Error"]["Code"] not in ("Unauthorized", "AccessDenied", "InvalidAccessKeyId"):
+				raise
+			if time.monotonic() > deadline:
+				raise
+			time.sleep(3)

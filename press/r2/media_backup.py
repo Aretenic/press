@@ -55,7 +55,7 @@ def copy_all_media():
 def copy_site_media(site: str, today: date | None = None) -> dict:
 	today = today or date.today()
 	media, backups = frappe.db.get_value("Site", site, ["r2_media_bucket", "r2_backup_bucket"])
-	s3 = get_s3()
+	s3 = get_s3(media)
 	stats = {"copied": 0, "unchanged": 0, "failed": 0, "missing": 0, "deleted": 0}
 
 	source = list_objects(s3, media, "")
@@ -105,8 +105,8 @@ def expire_missing(s3, site: str, backups: str, source: dict, copies: dict, toda
 	frappe.db.commit()
 
 
-def get_s3():
-	access_key_id, secret = get_press_s3_credentials()
+def get_s3(probe_bucket: str):
+	access_key_id, secret = get_press_s3_credentials(probe_bucket)
 	return client(
 		"s3",
 		aws_access_key_id=access_key_id,

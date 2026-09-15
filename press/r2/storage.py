@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 import frappe
 from frappe.utils.password import get_decrypted_password, set_encrypted_password
 
-from press.r2.cloudflare import Client, s3_endpoint
+from press.r2.cloudflare import Client, s3_endpoint, wait_until_usable
 
 if TYPE_CHECKING:
 	from press.press.doctype.site.site import Site
@@ -136,6 +136,7 @@ def _ensure_bucket(client: Client, site: Site, purpose: str, locations: dict) ->
 		for stale in client.find_tokens(key_name):
 			client.delete_token(stale["id"])
 		access_key_id, secret = client.create_s3_key(key_name, [name])
+		wait_until_usable(client.account_id, access_key_id, secret, name)
 		bucket_doc = frappe.get_doc("Backup Bucket", name)
 		bucket_doc.access_key_id = access_key_id
 		bucket_doc.secret_access_key = secret
@@ -200,7 +201,7 @@ def get_site_backup_bucket(site: str) -> str | None:
 	return frappe.db.get_value("Site", site, "r2_backup_bucket")
 
 
-def get_press_s3_credentials() -> tuple[str, str]:
+def get_press_s3_credentials(probe_bucket: str) -> tuple[str, str]:
 	"""Press's own all-buckets key, for server-side copies. Minted once, never sent to servers."""
 	access_key_id = frappe.db.get_single_value("Press Settings", "r2_press_access_key_id")
 	secret = get_decrypted_password(
@@ -213,6 +214,7 @@ def get_press_s3_credentials() -> tuple[str, str]:
 	for stale in client.find_tokens("press-all-buckets"):
 		client.delete_token(stale["id"])
 	access_key_id, secret = client.create_s3_key("press-all-buckets", None)
+	wait_until_usable(client.account_id, access_key_id, secret, probe_bucket)
 	# Written directly: saving Press Settings would re-run validations unrelated to R2
 	frappe.db.set_single_value("Press Settings", "r2_press_access_key_id", access_key_id)
 	set_encrypted_password("Press Settings", "Press Settings", secret, "r2_press_secret_access_key")
