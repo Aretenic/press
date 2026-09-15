@@ -1,5 +1,3 @@
-from press.api.account import get_frappe_io_auth_url
-
 from . import __version__ as app_version
 
 app_name = "press"
@@ -69,7 +67,12 @@ website_route_rules = [
 ]
 
 website_redirects = [
-	{"source": "/dashboard/f-login", "target": get_frappe_io_auth_url() or "/"},
+	# ARETENIC: upstream computed this target with get_frappe_io_auth_url(), a database query at
+	# import time. When caches are cold (before_migrate flushes Redis) that query loads a DocType,
+	# which reads hooks while this module is half imported, and the cached hooks lack
+	# scheduler_events: migrate then deletes every Press Scheduled Job Type. We do not offer
+	# frappe.io login, so the redirect is static.
+	{"source": "/dashboard/f-login", "target": "/"},
 	{
 		"source": "/suspended-site",
 		"target": "/api/method/press.api.handle_suspended_site_redirection",
