@@ -91,16 +91,18 @@ def ensure_site_storage(site: Site) -> None:
 def _ensure_bucket(client: Client, site: Site, purpose: str, locations: dict) -> str:
 	kind = SUFFIX[purpose]
 	hint = locations[kind]
+	# In Site.before_insert the document has no name yet: Frappe names it after before_insert
+	site_name = site.name or site._get_site_name(site.subdomain)
 	for attempt in range(1, 10):
 		name = f"{site.subdomain}-{kind}" if attempt == 1 else f"{site.subdomain}-{kind}-{attempt}"
 		row = frappe.db.get_value("Backup Bucket", name, ["site", "purpose"], as_dict=True)
-		if row and (row.site != site.name or row.purpose != purpose):
+		if row and (row.site != site_name or row.purpose != purpose):
 			continue  # belongs to another site, archived or not: never reuse it
 		# Created now, ours from an earlier try (row), or left over from an interrupted run (no row)
 		client.create_bucket(name, hint)
 		break
 	else:
-		frappe.throw(f"No free R2 bucket name for {site.name} ({kind})")
+		frappe.throw(f"No free R2 bucket name for {site_name} ({kind})")
 
 	info = client.get_bucket(name) or {}
 	location = (info.get("location") or "").lower()
@@ -118,7 +120,7 @@ def _ensure_bucket(client: Client, site: Site, purpose: str, locations: dict) ->
 				"doctype": "Backup Bucket",
 				"bucket_name": name,
 				"purpose": purpose,
-				"site": site.name,
+				"site": site_name,
 				"cluster": site.cluster,
 				"region": "auto",
 				"endpoint_url": client.s3_endpoint,
