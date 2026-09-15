@@ -304,6 +304,11 @@ class CreateServerJob(PressJob):
 		if self.server_type != "Server":
 			return
 
+		# The rclone streaming path cannot reach S3-compatible stores such as R2 (it maps providers to
+		# AWS endpoints only), so installs that use them opt out with `disable_backup_streaming`.
+		if frappe.conf.get("disable_backup_streaming"):
+			return
+
 		self.server_doc.enable_backup_streaming()
 
 	@task
