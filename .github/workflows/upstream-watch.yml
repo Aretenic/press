@@ -1,0 +1,25 @@
+name: Upstream watch
+
+# Weekly digest of upstream press and agent, as one issue in this fork (Aretenic ADR 045).
+# Schedules only run from the repository's default branch, which is this fork's own branch.
+
+on:
+  schedule:
+    - cron: "0 13 * * 1" # Monday 08:00 America/Chicago in summer
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github
+      - name: Open the weekly digest issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 .github/upstream_watch.py
