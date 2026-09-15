@@ -208,6 +208,10 @@ class PressSettings(Document):
 		publish_docs: DF.Check
 		pulse_api_key: DF.Data | None
 		pulse_site: DF.Data | None
+		r2_account_id: DF.Data | None
+		r2_api_token: DF.Password | None
+		r2_press_access_key_id: DF.Data | None
+		r2_press_secret_access_key: DF.Password | None
 		raven_access_key_id: DF.Data | None
 		raven_incidents_channel: DF.Data | None
 		raven_secret_access_key: DF.Password | None
@@ -376,7 +380,7 @@ class PressSettings(Document):
 			frappe.db.get_value(
 				"Press Settings",
 				"Press Settings",
-				["aws_s3_bucket", "offsite_backups_access_key_id"],
+				["aws_s3_bucket", "offsite_backups_access_key_id", "r2_account_id"],
 			)
 		)
 

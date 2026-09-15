@@ -209,6 +209,8 @@ class Site(Document, TagHelpers):
 		only_update_at_specified_time: DF.Check
 		physical_backup_times: DF.Table[SiteBackupTime]
 		plan: DF.Link | None
+		r2_backup_bucket: DF.Link | None
+		r2_media_bucket: DF.Link | None
 		reason_for_disabling_monitoring: DF.Data | None
 		remote_config_file: DF.Link | None
 		remote_database_file: DF.Link | None
@@ -565,6 +567,11 @@ class Site(Document, TagHelpers):
 		# initialize site.config based on plan
 		self._update_configuration(self.get_plan_config(), save=False)
 		self.sync_fc_team_config()
+
+		from press.r2.storage import ensure_site_storage
+
+		# Buckets and keys come first, so a school never exists without its backup bucket
+		ensure_site_storage(self)
 
 		if not self.setup_wizard_status_check_next_retry_on:
 			self.setup_wizard_status_check_next_retry_on = now_datetime()
@@ -2194,6 +2201,7 @@ class Site(Document, TagHelpers):
 				"remote_database_file",
 				"remote_public_file",
 				"remote_private_file",
+				"remote_config_file",
 			],
 			as_list=True,
 			order_by="creation desc",

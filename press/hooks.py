@@ -323,6 +323,7 @@ scheduler_events = {
 			"press.press.audit.billing_audit",
 		],
 		"0 3 * * *": [
+			"press.r2.media_backup.copy_all_media",
 			"press.press.doctype.drip_email.drip_email.send_drip_emails",
 			"press.press.doctype.virtual_disk_snapshot.virtual_disk_snapshot.sync_all_snapshots_from_aws",
 		],

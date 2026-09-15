@@ -469,11 +469,14 @@ class OngoingSnapshotError(Exception):
 	pass
 
 
-def track_offsite_backups(site: str, backup_data: dict, offsite_backup_data: dict) -> tuple:
+def track_offsite_backups(
+	site: str, backup_data: dict, offsite_backup_data: dict, bucket: str | None = None
+) -> tuple:
 	remote_files = {"database": None, "site_config": None, "public": None, "private": None}
 
 	if offsite_backup_data:
-		bucket = get_backup_bucket(frappe.db.get_value("Site", site, "cluster"))
+		# The bucket in the job's request is where the files are; the cluster's may differ
+		bucket = bucket or get_backup_bucket(frappe.db.get_value("Site", site, "cluster"))
 		for type, backup in backup_data.items():
 			file_name, file_size = backup["file"], backup["size"]
 			file_path = offsite_backup_data.get(file_name)
@@ -531,7 +534,9 @@ def process_backup_site_job_update(job):
 					remote_config_file,
 					remote_public,
 					remote_private,
-				) = track_offsite_backups(job.site, backup_data, offsite_backup_data)
+				) = track_offsite_backups(
+					job.site, backup_data, offsite_backup_data, get_requested_bucket(job)
+				)
 
 				site_backup_dict = {
 					"files_availability": "Available",
@@ -616,9 +621,20 @@ def _send_backup_failure_email_to_user(site_backup: SiteBackup):
 		)
 
 
+def get_requested_bucket(job) -> str | None:
+	"""The offsite bucket an agent job was sent, if any."""
+	try:
+		return (json.loads(job.request_data or "{}").get("offsite") or {}).get("bucket")
+	except (TypeError, ValueError, AttributeError):
+		return None
+
+
 def get_backup_bucket(cluster, region=False):
 	bucket_for_cluster = frappe.get_all(
-		"Backup Bucket", {"cluster": cluster}, ["name", "region", "endpoint_url"], limit=1
+		"Backup Bucket",
+		{"cluster": cluster, "purpose": ("in", ("Cluster Backups", "", None)), "site": ("is", "not set")},
+		["name", "region", "endpoint_url"],
+		limit=1,
 	)
 
 	# `provider` and `endpoint_url` are only configured globally on Press Settings, so the
@@ -695,7 +711,7 @@ def _create_site_backup_from_agent_job(job: "AgentJob"):
 			remote_config_file,
 			remote_public,
 			remote_private,
-		) = track_offsite_backups(job.site, backup_data, offsite_backup_data)
+		) = track_offsite_backups(job.site, backup_data, offsite_backup_data, get_requested_bucket(job))
 
 		site_server = frappe.db.get_value("Site", job.site, "server")
 		site_backup = frappe.get_doc(

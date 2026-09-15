@@ -79,7 +79,11 @@ def poll_file_statuses():
 		},
 	]
 
-	for b in frappe.get_all("Backup Bucket", ["bucket_name", "cluster", "region"]):
+	# Never a site's own bucket: this job deletes every object it has no Remote File for, and a
+	# school's buckets hold objects Press does not track (ADR 041)
+	for b in frappe.get_all(
+		"Backup Bucket", {"site": ("is", "not set")}, ["bucket_name", "cluster", "region"]
+	):
 		buckets.append(
 			{
 				"name": b["bucket_name"],
@@ -155,17 +159,15 @@ def delete_remote_backup_objects(remote_files):
 	if not remote_files:
 		return None
 
-	buckets = {bucket: [] for bucket in frappe.get_all("Backup Bucket", pluck="name")}
-	buckets.update({frappe.db.get_single_value("Press Settings", "aws_s3_bucket"): []})
-
-	[
-		buckets[bucket].append(file)
-		for file, bucket in frappe.db.get_values(
-			"Remote File",
-			{"name": ("in", remote_files), "status": "Available"},
-			["file_path", "bucket"],
-		)
-	]
+	# Grouped by whatever bucket each file is in: per-site buckets are not known in advance
+	buckets = {}
+	for file, bucket in frappe.db.get_values(
+		"Remote File",
+		{"name": ("in", remote_files), "status": "Available"},
+		["file_path", "bucket"],
+	):
+		bucket = bucket or frappe.db.get_single_value("Press Settings", "aws_s3_bucket")
+		buckets.setdefault(bucket, []).append(file)
 
 	delete_s3_files(buckets)
 	frappe.db.set_value("Remote File", {"name": ("in", remote_files)}, "status", "Unavailable")
@@ -248,10 +250,12 @@ class RemoteFile(Document):
 			)
 
 		elif self.bucket:
-			access_key_id = frappe.db.get_single_value("Press Settings", "offsite_backups_access_key_id")
-			secret_access_key = get_decrypted_password(
-				"Press Settings", "Press Settings", "offsite_backups_secret_access_key"
-			)
+			from press.press.doctype.backup_bucket.backup_bucket import get_bucket_credentials
+
+			# A site's own bucket has its own key (ADR 041); other buckets use Press Settings' keys
+			credentials = get_bucket_credentials(self.bucket)
+			access_key_id = credentials["access_key_id"]
+			secret_access_key = credentials["secret_access_key"]
 
 		else:
 			return None
@@ -362,22 +366,21 @@ def delete_s3_files(buckets):
 	"""Delete specified files from s3 buckets"""
 	from boto3 import resource
 
+	from press.press.doctype.backup_bucket.backup_bucket import get_bucket_credentials
 	from press.utils import chunk
 
-	press_settings = frappe.get_single("Press Settings")
 	for bucket_name in buckets:
-		endpoint_url = (
-			frappe.db.get_value("Backup Bucket", bucket_name, "endpoint_url") or "https://s3.amazonaws.com"
-		)
+		if not buckets[bucket_name]:
+			continue
+		credentials = get_bucket_credentials(bucket_name)
+		endpoint_url = credentials["endpoint_url"] or "https://s3.amazonaws.com"
 		if "s3.me-south-1.amazonaws.com" in endpoint_url:
 			continue
 
 		s3 = resource(
 			"s3",
-			aws_access_key_id=press_settings.offsite_backups_access_key_id,
-			aws_secret_access_key=press_settings.get_password(
-				"offsite_backups_secret_access_key", raise_exception=False
-			),
+			aws_access_key_id=credentials["access_key_id"],
+			aws_secret_access_key=credentials["secret_access_key"],
 			endpoint_url=endpoint_url,
 		)
 		bucket = s3.Bucket(bucket_name)

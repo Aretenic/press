@@ -448,9 +448,10 @@ def get_read_bucket(cluster: str) -> dict:
 
 
 def get_site_buckets(site: str) -> list[dict]:
-	"""The site's own cluster bucket first, then any it used before, so a move between clusters still reads."""
-	cluster = frappe.db.get_value("Site", site, "cluster")
-	current = get_read_bucket(cluster)
+	"""The site's own bucket first (its R2 backup bucket, else its cluster's), then any it used
+	before, so a move between clusters still reads."""
+	cluster, own_bucket = frappe.db.get_value("Site", site, ["cluster", "r2_backup_bucket"])
+	current = resolve_bucket(own_bucket) if own_bucket else get_read_bucket(cluster)
 
 	buckets = {current["name"]: current}
 	used_before = frappe.get_all("Remote File", {"site": site, "bucket": ("is", "set")}, pluck="bucket")
@@ -460,13 +461,16 @@ def get_site_buckets(site: str) -> list[dict]:
 
 
 def list_stored_backups(site: str, start: date, end: date) -> dict[str, dict]:
-	credentials = get_offsite_credentials()
-	if not credentials:
-		return {}
+	from press.press.doctype.backup_bucket.backup_bucket import get_bucket_credentials
 
 	days: dict[str, dict] = {}
 	for bucket in get_site_buckets(site):
-		# The current cluster's bucket is walked first, so it wins where both hold a day
+		# A site's own bucket has its own key; other buckets use Press Settings' (ADR 041)
+		bucket_credentials = get_bucket_credentials(bucket["name"])
+		credentials = (bucket_credentials["access_key_id"], bucket_credentials["secret_access_key"])
+		if not all(credentials):
+			continue
+		# The current bucket is walked first, so it wins where both hold a day
 		for day, entry in list_bucket(bucket, site, start, end, credentials).items():
 			days.setdefault(day, entry)
 	return days

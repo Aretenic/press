@@ -333,7 +333,7 @@ class Agent:
 		data = {}
 		if create_offsite_backup:
 			backups_path = os.path.join(site.name, str(date.today()))
-			offsite_config = self._get_offsite_backup_config(site.cluster, backups_path)
+			offsite_config = self._get_offsite_backup_config(site.cluster, backups_path, site=site.name)
 			if offsite_config:
 				data.update({"offsite": offsite_config})
 			else:
@@ -500,7 +500,7 @@ class Agent:
 		}
 		if create_offsite_backup:
 			backups_path = os.path.join(site_name, str(date.today()))
-			offsite_config = self._get_offsite_backup_config(site.cluster, backups_path)
+			offsite_config = self._get_offsite_backup_config(site.cluster, backups_path, site=site.name)
 			if offsite_config:
 				data.update({"offsite": offsite_config})
 			else:
@@ -575,7 +575,7 @@ class Agent:
 		}
 		if site_backup.offsite:
 			backups_path = os.path.join(site.name, str(date.today()))
-			offsite_config = self._get_offsite_backup_config(site.cluster, backups_path)
+			offsite_config = self._get_offsite_backup_config(site.cluster, backups_path, site=site.name)
 			if offsite_config:
 				data.update({"offsite": offsite_config})
 			else:
@@ -2036,8 +2036,27 @@ Response: {reason or getattr(result, "text", "Unknown")}
 			},
 		)
 
-	def _get_offsite_backup_config(self, cluster: str, backups_path: str) -> dict | None:
+	def _get_offsite_backup_config(
+		self, cluster: str, backups_path: str, site: str | None = None
+	) -> dict | None:
+		from press.press.doctype.backup_bucket.backup_bucket import get_bucket_credentials
 		from press.press.doctype.site_backup.site_backup import get_backup_bucket
+		from press.r2.storage import get_site_backup_bucket
+
+		# A site with tenant storage backs up only into its own bucket, with its own key (ADR 041)
+		if site and (site_bucket := get_site_backup_bucket(site)):
+			credentials = get_bucket_credentials(site_bucket)
+			return {
+				"bucket": site_bucket,
+				"auth": {
+					"ACCESS_KEY": credentials["access_key_id"],
+					"SECRET_KEY": credentials["secret_access_key"],
+					"REGION": credentials["region"],
+					"PROVIDER": frappe.db.get_single_value("Press Settings", "offsite_backups_provider"),
+					"ENDPOINT_URL": credentials["endpoint_url"],
+				},
+				"path": backups_path,
+			}
 
 		settings = frappe.get_single("Press Settings")
 		backup_bucket_config = get_backup_bucket(cluster, region=True)

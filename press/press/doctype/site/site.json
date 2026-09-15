@@ -65,6 +65,10 @@
 		"column_break_34",
 		"remote_private_file",
 		"remote_public_file",
+		"r2_storage_section",
+		"r2_backup_bucket",
+		"column_break_r2",
+		"r2_media_bucket",
 		"backup_tab",
 		"logical_backup_section",
 		"skip_scheduled_logical_backups",
@@ -114,6 +118,29 @@
 		"tags"
 	],
 	"fields": [
+		{
+			"fieldname": "r2_storage_section",
+			"fieldtype": "Section Break",
+			"label": "Tenant Storage"
+		},
+		{
+			"fieldname": "r2_backup_bucket",
+			"fieldtype": "Link",
+			"label": "Backup Bucket",
+			"options": "Backup Bucket",
+			"read_only": 1
+		},
+		{
+			"fieldname": "column_break_r2",
+			"fieldtype": "Column Break"
+		},
+		{
+			"fieldname": "r2_media_bucket",
+			"fieldtype": "Link",
+			"label": "Media Bucket",
+			"options": "Backup Bucket",
+			"read_only": 1
+		},
 		{
 			"fetch_from": "bench.server",
 			"fetch_if_empty": 1,
@@ -800,7 +827,7 @@
 			"link_fieldname": "site"
 		}
 	],
-	"modified": "2026-04-12 12:56:22.557860",
+	"modified": "2026-09-15 17:30:00.000000",
 	"modified_by": "Administrator",
 	"module": "Press",
 	"name": "Site",

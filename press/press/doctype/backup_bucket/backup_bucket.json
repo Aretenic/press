@@ -9,12 +9,19 @@
 	"field_order": [
 		"cluster",
 		"bucket_name",
+		"purpose",
+		"site",
+		"location",
 		"region",
 		"endpoint_url",
 		"replication_enabled",
 		"replication_bucket",
 		"replication_region",
-		"replication_endpoint_url"
+		"replication_endpoint_url",
+		"credentials_section",
+		"access_key_id",
+		"secret_access_key",
+		"media_missing"
 	],
 	"fields": [
 		{
@@ -72,12 +79,61 @@
 			"fieldtype": "Data",
 			"label": "Replication Endpoint URL",
 			"mandatory_depends_on": "eval: doc.replication_enabled"
+		},
+		{
+			"default": "Cluster Backups",
+			"fieldname": "purpose",
+			"fieldtype": "Select",
+			"in_list_view": 1,
+			"in_standard_filter": 1,
+			"label": "Purpose",
+			"options": "Cluster Backups\nSite Backups\nSite Media\nBinlogs"
+		},
+		{
+			"fieldname": "site",
+			"fieldtype": "Link",
+			"in_standard_filter": 1,
+			"label": "Site",
+			"mandatory_depends_on": "eval: ['Site Backups', 'Site Media'].includes(doc.purpose)",
+			"options": "Site",
+			"search_index": 1
+		},
+		{
+			"description": "Where the provider says the bucket is, read back after creation",
+			"fieldname": "location",
+			"fieldtype": "Data",
+			"label": "Location",
+			"read_only": 1
+		},
+		{
+			"description": "A key scoped to this bucket only. When empty, Press Settings' offsite keys are used.",
+			"fieldname": "credentials_section",
+			"fieldtype": "Section Break",
+			"label": "Credentials"
+		},
+		{
+			"fieldname": "access_key_id",
+			"fieldtype": "Data",
+			"label": "Access Key ID"
+		},
+		{
+			"fieldname": "secret_access_key",
+			"fieldtype": "Password",
+			"label": "Secret Access Key"
+		},
+		{
+			"description": "Nightly media copy: when each copied object first went missing from the media bucket (ADR 041 §4)",
+			"fieldname": "media_missing",
+			"fieldtype": "JSON",
+			"hidden": 1,
+			"label": "Media Missing Since",
+			"read_only": 1
 		}
 	],
 	"grid_page_length": 50,
 	"index_web_pages_for_search": 1,
 	"links": [],
-	"modified": "2026-03-24 15:27:04.797966",
+	"modified": "2026-09-15 17:45:00.000000",
 	"modified_by": "Administrator",
 	"module": "Press",
 	"name": "Backup Bucket",

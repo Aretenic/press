@@ -77,6 +77,12 @@
 		"offsite_backups_access_key_id",
 		"offsite_backups_secret_access_key",
 		"offsite_backups_count",
+		"r2_storage_section",
+		"r2_account_id",
+		"r2_api_token",
+		"column_break_r2",
+		"r2_press_access_key_id",
+		"r2_press_secret_access_key",
 		"backups_section",
 		"backup_interval",
 		"backup_offset",
@@ -1899,11 +1905,45 @@
 			"fieldname": "raven_incidents_channel",
 			"fieldtype": "Data",
 			"label": "Raven Incidents Channel"
+		},
+		{
+			"description": "Per-school media and backup buckets (ADR 041). Leave empty to keep Press's per-cluster offsite backups.",
+			"fieldname": "r2_storage_section",
+			"fieldtype": "Section Break",
+			"label": "Tenant Storage (Cloudflare R2)"
+		},
+		{
+			"fieldname": "r2_account_id",
+			"fieldtype": "Data",
+			"label": "R2 Account ID"
+		},
+		{
+			"description": "Account-owned token: Workers R2 Storage Edit and Account API Tokens Edit. It creates buckets and mints bucket-scoped keys.",
+			"fieldname": "r2_api_token",
+			"fieldtype": "Password",
+			"label": "R2 API Token"
+		},
+		{
+			"fieldname": "column_break_r2",
+			"fieldtype": "Column Break"
+		},
+		{
+			"description": "All-buckets key minted by Press for server-side copies (nightly media backup). Never sent to servers.",
+			"fieldname": "r2_press_access_key_id",
+			"fieldtype": "Data",
+			"label": "R2 Press Access Key ID",
+			"read_only": 1
+		},
+		{
+			"fieldname": "r2_press_secret_access_key",
+			"fieldtype": "Password",
+			"label": "R2 Press Secret Access Key",
+			"read_only": 1
 		}
 	],
 	"issingle": 1,
 	"links": [],
-	"modified": "2026-09-11 13:26:41.047658",
+	"modified": "2026-09-15 17:30:00.000000",
 	"modified_by": "Administrator",
 	"module": "Press",
 	"name": "Press Settings",

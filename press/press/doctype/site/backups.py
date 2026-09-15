@@ -50,7 +50,7 @@ class BackupRotationScheme:
 			remote_files = frappe.db.get_value(
 				"Site Backup",
 				backup,
-				["remote_database_file", "remote_private_file", "remote_public_file"],
+				["remote_database_file", "remote_private_file", "remote_public_file", "remote_config_file"],
 			)
 			remote_files_to_delete.extend(remote_files)
 			frappe.db.set_value("Site Backup", backup, "files_availability", "Unavailable")
