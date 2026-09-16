@@ -1,17 +1,3 @@
-{#- Aretenic (ADR 043): a hand-built Press host runs only node_exporter (own TLS and basic auth) and Press's /metrics. -#}
-{%- if press_host_exporters | default('Full') == 'Node Only' %}
-- targets:
-    - '{{ press_app_server }}:{{ press_node_exporter_port | default(9100) }}'
-  labels:
-    job: node
-    __metrics_path__: /metrics
-
-- targets:
-    - '{{ press_app_server }}'
-  labels:
-    job: press
-    __metrics_path__: /metrics
-{%- else %}
 - targets:
     - '{{ press_app_server }}'
     - '{{ press_db_server }}'
@@ -78,4 +64,3 @@
   labels:
     job: press
     __metrics_path__: /metrics/press
-{%- endif %}

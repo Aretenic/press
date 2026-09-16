@@ -32,6 +32,40 @@ scrape_configs:
       - files:
           - /home/frappe/prometheus/file_sd/self.yml
 
+  ## if press_host_exporters | default('Full') == 'Node Only' ##
+  # Aretenic (ADR 043 §1): a hand-built Press host. Frappe treats any Basic Authorization header as an
+  # API key login, so Press's /metrics takes the monitoring password in its own header.
+  - job_name: press
+    scrape_interval: 1m
+    scheme: https
+    metrics_path: /metrics
+    http_headers:
+      X-Metrics-Token:
+        secrets: ['{{ press_monitoring_password }}']
+    static_configs:
+      - targets: ['{{ press_app_server }}']
+        labels:
+          job: press
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+
+  - job_name: press-node
+    scrape_interval: 1m
+    scheme: https
+    metrics_path: /metrics
+    basic_auth:
+      username: frappe
+      password: '{{ press_monitoring_password }}'
+    static_configs:
+      - targets: ['{{ press_app_server }}:{{ press_node_exporter_port | default(9100) }}']
+        labels:
+          job: node
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        regex: '([^:]+):.*'
+  ## else ##
   - job_name: press
     scrape_interval: 1m
     scheme: https
@@ -44,6 +78,7 @@ scrape_configs:
     file_sd_configs:
       - files:
           - /home/frappe/prometheus/file_sd/press.yml
+  ## endif ##
 
   - job_name: site
     scrape_interval: 1m

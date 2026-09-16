@@ -194,21 +194,15 @@ class MetricsRenderer:
 		return response
 
 	def is_authorized(self) -> bool:
-		"""Aretenic (ADR 043 §1): the monitor scrapes with Press Settings' monitoring password.
+		"""Aretenic (ADR 043 §1): the monitor sends Press Settings' monitoring password in X-Metrics-Token.
 
+		Not Basic auth: Frappe takes any Basic Authorization header for an API key login and rejects it.
 		Fails closed: the metrics name every school's site, and no nginx guards the path here."""
 		password = frappe.get_single("Press Settings").get_password(
 			"press_monitoring_password", raise_exception=False
 		)
-		if not password:
-			return False
-		auth = frappe.request.authorization if frappe.request else None
-		return bool(
-			auth
-			and auth.type == "basic"
-			and auth.username == "frappe"
-			and hmac.compare_digest(auth.password or "", password)
-		)
+		token = frappe.get_request_header("X-Metrics-Token") if frappe.request else None
+		return bool(password and token and hmac.compare_digest(token, password))
 
 
 def to_unix(value) -> float:
