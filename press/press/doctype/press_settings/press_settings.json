@@ -101,6 +101,7 @@
 		"column_break_64",
 		"docker_registry_username",
 		"docker_registry_password",
+		"docker_registry_password_expires_on",
 		"docker_s3_secret_key",
 		"asset_store_section",
 		"asset_store_access_key",
@@ -258,6 +259,13 @@
 		"telegram_alerts_chat_group",
 		"send_email_notifications",
 		"email_recipients",
+		"press_host_exporters",
+		"alertmanager_email_section",
+		"alertmanager_smtp_smarthost",
+		"alertmanager_smtp_username",
+		"alertmanager_smtp_password",
+		"column_break_alertmanager_email",
+		"watchdog_ping_url",
 		"section_break_nloq",
 		"servers_using_alternative_http_port_for_communication",
 		"auto_scale_section",
@@ -615,6 +623,12 @@
 			"fieldname": "docker_registry_password",
 			"fieldtype": "Data",
 			"label": "Docker Registry Password"
+		},
+		{
+			"description": "Expiry date of the registry token (e.g. a GitHub personal access token). Exposed to Prometheus for the expiry alert.",
+			"fieldname": "docker_registry_password_expires_on",
+			"fieldtype": "Date",
+			"label": "Docker Registry Password Expires On"
 		},
 		{
 			"collapsible": 1,
@@ -1494,6 +1508,47 @@
 			"label": "Email Recipients"
 		},
 		{
+			"default": "Full",
+			"description": "Node Only: the Press host runs only node_exporter (port 9100, TLS, basic auth) and serves Press's /metrics.",
+			"fieldname": "press_host_exporters",
+			"fieldtype": "Select",
+			"label": "Press Host Exporters",
+			"options": "Full\nNode Only"
+		},
+		{
+			"fieldname": "alertmanager_email_section",
+			"fieldtype": "Section Break",
+			"label": "Alertmanager Email"
+		},
+		{
+			"description": "host:port. Alertmanager emails email_recipients directly, so email alerts do not depend on Press.",
+			"fieldname": "alertmanager_smtp_smarthost",
+			"fieldtype": "Data",
+			"label": "SMTP Smarthost"
+		},
+		{
+			"fieldname": "alertmanager_smtp_username",
+			"fieldtype": "Data",
+			"label": "SMTP Username",
+			"options": "Email"
+		},
+		{
+			"fieldname": "alertmanager_smtp_password",
+			"fieldtype": "Password",
+			"label": "SMTP Password"
+		},
+		{
+			"fieldname": "column_break_alertmanager_email",
+			"fieldtype": "Column Break"
+		},
+		{
+			"description": "Alertmanager posts the always-firing Watchdog alert here (e.g. a Healthchecks.io ping URL). Silence means the monitoring chain is down.",
+			"fieldname": "watchdog_ping_url",
+			"fieldtype": "Password",
+			"label": "Watchdog Ping URL",
+			"length": 255
+		},
+		{
 			"default": "1",
 			"fieldname": "use_agent_job_callbacks",
 			"fieldtype": "Check",
@@ -1950,7 +2005,7 @@
 	],
 	"issingle": 1,
 	"links": [],
-	"modified": "2026-09-15 20:30:00.000000",
+	"modified": "2026-09-16 10:00:00.000000",
 	"modified_by": "Administrator",
 	"module": "Press",
 	"name": "Press Settings",

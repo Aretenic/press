@@ -1,0 +1,43 @@
+---
+# Aretenic (ADR 043 §5): logs stay on each server with explicit retention, compressed after a day.
+- name: Keep nginx logs for 90 days
+  copy:
+    dest: /etc/logrotate.d/nginx
+    content: |
+      /var/log/nginx/*.log {
+          daily
+          rotate 90
+          missingok
+          notifempty
+          compress
+          delaycompress
+          create 0640 www-data adm
+          sharedscripts
+          prerotate
+              if [ -d /etc/logrotate.d/httpd-prerotate ]; then
+                  run-parts /etc/logrotate.d/httpd-prerotate
+              fi
+          endscript
+          postrotate
+              invoke-rc.d nginx rotate >/dev/null 2>&1
+          endscript
+      }
+
+- name: Keep agent logs for 30 days
+  copy:
+    dest: /etc/logrotate.d/agent
+    content: |
+      /home/frappe/agent/logs/*.log {
+          daily
+          rotate 30
+          maxsize 200M
+          missingok
+          notifempty
+          compress
+          delaycompress
+          copytruncate
+      }
+
+- name: Check logrotate configuration
+  command: logrotate --debug /etc/logrotate.conf
+  changed_when: false

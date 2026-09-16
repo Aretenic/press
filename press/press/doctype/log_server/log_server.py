@@ -33,7 +33,7 @@ class LogServer(BaseServer):
 		private_ip: DF.Data
 		private_mac_address: DF.Data | None
 		private_vlan_id: DF.Data | None
-		provider: DF.Literal["Generic", "Scaleway", "AWS EC2", "OCI"]
+		provider: DF.Literal["Generic", "Scaleway", "AWS EC2", "OCI", "Vultr"]
 		root_public_key: DF.Code | None
 		ssh_port: DF.Int
 		ssh_user: DF.Data | None

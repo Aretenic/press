@@ -3,14 +3,17 @@
   copy:
     dest: /etc/logrotate.d/monitor_json_logs
     content: |
-      /home/frappe/benches/*/logs/monitor.json.log {
-          size 200M
+      # Aretenic (ADR 043 §5): all bench logs, 30 days, compressed. One stanza, since logrotate
+      # refuses a file matched by two.
+      /home/frappe/benches/*/logs/*.log {
+          maxsize 200M
           daily
-          rotate 1
+          rotate 30
           missingok
           notifempty
-          nocompress
-          create 640 frappe frappe
+          compress
+          delaycompress
+          copytruncate
       }
 - name: Force logrotate to apply new configuration
   command: logrotate -f /etc/logrotate.d/monitor_json_logs

@@ -24,6 +24,7 @@ from boto3 import client
 from botocore.exceptions import ClientError
 
 from press.r2.cloudflare import s3_endpoint
+from press.r2.heartbeat import record_success
 from press.r2.storage import get_press_s3_credentials, is_enabled
 from press.utils import log_error
 
@@ -65,6 +66,8 @@ def copy_site_media(site: str, today: date | None = None) -> dict:
 
 	if stats["failed"]:
 		log_error("R2 Media Backup Incomplete", site=site, stats=stats)
+	else:
+		record_success("media_backup", site)
 	return stats
 
 

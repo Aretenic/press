@@ -6,3 +6,4 @@
   gather_facts: yes
   roles:
     - role: rotate_mariadb_logs
+    - role: rotate_server_logs

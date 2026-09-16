@@ -29,6 +29,9 @@ class PressSettings(Document):
 		agent_github_access_token: DF.Data | None
 		agent_repository_owner: DF.Data | None
 		agent_sentry_dsn: DF.Data | None
+		alertmanager_smtp_password: DF.Password | None
+		alertmanager_smtp_smarthost: DF.Data | None
+		alertmanager_smtp_username: DF.Data | None
 		allow_patch_builds: DF.Check
 		anthropic_api_key: DF.Password | None
 		app_include_script: DF.Data | None
@@ -132,6 +135,7 @@ class PressSettings(Document):
 		disallow_disposable_emails: DF.Check
 		docker_registry_namespace: DF.Data | None
 		docker_registry_password: DF.Data | None
+		docker_registry_password_expires_on: DF.Date | None
 		docker_registry_url: DF.Data | None
 		docker_registry_username: DF.Data | None
 		docker_s3_access_key: DF.Data | None
@@ -201,6 +205,7 @@ class PressSettings(Document):
 		plausible_api_key: DF.Password | None
 		plausible_site_id: DF.Data | None
 		plausible_url: DF.Data | None
+		press_host_exporters: DF.Literal["Full", "Node Only"]
 		press_monitoring_password: DF.Password | None
 		press_trial_plan: DF.Link | None
 		print_format: DF.Data | None
@@ -273,6 +278,7 @@ class PressSettings(Document):
 		use_new_deploy_flow: DF.Check
 		use_staging_ca: DF.Check
 		verify_cards_with_micro_charge: DF.Literal["No", "Only INR", "Only USD", "Both INR and USD"]
+		watchdog_ping_url: DF.Password | None
 		wazuh_agent_version: DF.Data | None
 		wazuh_api_password: DF.Password | None
 		wazuh_api_url: DF.Data | None

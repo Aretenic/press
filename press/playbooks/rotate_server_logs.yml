@@ -1,9 +1,8 @@
 ---
-- name: Setup Logrotate for Monitor Json Logs
+- name: Setup Logrotate for Server Logs
   hosts: all
   become: yes
   become_user: root
   gather_facts: yes
   roles:
-    - role: rotate_monitor_json_logs
     - role: rotate_server_logs

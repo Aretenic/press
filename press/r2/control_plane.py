@@ -28,6 +28,7 @@ import frappe
 from boto3 import client
 
 from press.press.doctype.backup_bucket.backup_bucket import get_bucket_credentials
+from press.r2.heartbeat import record_success
 from press.r2.retention import DAILY_DAYS, LOCK_MARGIN, MONTHLY_DAY, MONTHLY_DAYS, WEEKLY_WEEKS
 from press.r2.storage import LOCATIONS, LOCK_DAYS, ensure_bucket, get_client, is_enabled
 from press.utils import log_error
@@ -63,6 +64,7 @@ def run(now: datetime | None = None) -> dict:
 	except Exception:
 		log_error("R2 Control Plane Backup Failed")
 		raise
+	record_success("control_plane_backup")
 	return {"bucket": bucket, "uploaded": uploaded, "deleted": deleted}
 
 

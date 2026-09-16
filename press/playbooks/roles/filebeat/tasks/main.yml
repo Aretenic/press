@@ -97,9 +97,19 @@
     - 'containers'
     - 'monitor'
 
+# Aretenic (ADR 043 §5): without a Log Server, filebeat stays installed but disabled
 - name: Restart Filebeat Daemon
   systemd:
     name: filebeat
     daemon_reload: true
     enabled: yes
     state: restarted
+  when: log_server | default('', true) | length > 0
+
+- name: Disable Filebeat Without a Log Server
+  systemd:
+    name: filebeat
+    daemon_reload: true
+    enabled: no
+    state: stopped
+  when: log_server | default('', true) | length == 0

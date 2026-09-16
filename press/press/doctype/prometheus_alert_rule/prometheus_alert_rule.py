@@ -16,6 +16,30 @@ from press.agent import Agent
 if TYPE_CHECKING:
 	from press.press.doctype.server.server import Server
 
+WATCHDOG_ALERT = "Watchdog"
+
+
+def get_email_recipients(settings) -> str:
+	return ", ".join(email.strip() for email in (settings.email_recipients or "").split(",") if email.strip())
+
+
+def get_alertmanager_email_global(settings) -> dict | None:
+	password = settings.get_password("alertmanager_smtp_password", raise_exception=False)
+	if not (
+		settings.alertmanager_smtp_smarthost
+		and settings.alertmanager_smtp_username
+		and password
+		and get_email_recipients(settings)
+	):
+		return None
+	return {
+		"smtp_smarthost": settings.alertmanager_smtp_smarthost,
+		"smtp_from": settings.alertmanager_smtp_username,
+		"smtp_auth_username": settings.alertmanager_smtp_username,
+		"smtp_auth_password": password,
+		"smtp_require_tls": True,
+	}
+
 
 class PrometheusAlertRule(Document):
 	# begin: auto-generated types
@@ -97,26 +121,49 @@ class PrometheusAlertRule(Document):
 		return rules_dict
 
 	def get_routes(self):
-		webhook_token = frappe.db.get_value(
-			"Monitor Server", frappe.db.get_single_value("Press Settings", "monitor_server"), "webhook_token"
-		)
+		settings = frappe.get_single("Press Settings")
+		webhook_token = frappe.db.get_value("Monitor Server", settings.monitor_server, "webhook_token")
 
 		callback_url = frappe.utils.get_url("api/method/press.api.monitoring.alert")
 		if webhook_token:
 			callback_url = f"{callback_url}?webhook_token={webhook_token}"
 
+		press_receiver = {
+			"name": "web.hook",
+			"webhook_configs": [{"url": callback_url}],
+		}
 		routes_dict = {
 			"route": {"receiver": "web.hook", "routes": []},
-			"receivers": [
-				{
-					"name": "web.hook",
-					"webhook_configs": [{"url": callback_url}],
-				}
-			],
+			"receivers": [press_receiver],
 		}
+
+		# Aretenic (ADR 043 §4): Alertmanager also emails directly, so email alerts do not depend on Press
+		if email_global := get_alertmanager_email_global(settings):
+			routes_dict["global"] = email_global
+			press_receiver["email_configs"] = [
+				{"to": get_email_recipients(settings), "send_resolved": True},
+			]
+
+		# Aretenic (ADR 043 §3): the always-firing Watchdog pings an external check; silence raises its alert
+		watchdog_url = settings.get_password("watchdog_ping_url", raise_exception=False)
+		if watchdog_url:
+			routes_dict["receivers"].append(
+				{"name": "watchdog", "webhook_configs": [{"url": watchdog_url, "send_resolved": False}]}
+			)
+			routes_dict["route"]["routes"].append(
+				{
+					"receiver": "watchdog",
+					"matchers": [f'alertname="{WATCHDOG_ALERT}"'],
+					"group_wait": "0s",
+					"group_interval": "1m",
+					"repeat_interval": "1m",
+				}
+			)
 
 		rules = frappe.get_all(self.doctype, {"enabled": True})
 		for rule in rules:
+			if watchdog_url and rule.name == WATCHDOG_ALERT:
+				continue
 			rule_doc = frappe.get_doc(self.doctype, rule.name)
 			routes_dict["route"]["routes"].append(rule_doc.get_route())
 

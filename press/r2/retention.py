@@ -19,6 +19,7 @@ from datetime import date, datetime, timedelta
 
 import frappe
 
+from press.r2.heartbeat import record_success
 from press.r2.storage import LOCK_DAYS
 
 DAILY_DAYS = 7
@@ -85,3 +86,4 @@ def cleanup_offsite():
 	scheme = BackupRotationScheme()
 	remote_files = scheme._expire_and_get_remote_files(backups_due_for_expiry())
 	delete_remote_backup_objects(remote_files)
+	record_success("offsite_rotation")

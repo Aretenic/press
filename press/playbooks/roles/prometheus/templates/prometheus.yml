@@ -65,6 +65,8 @@ scrape_configs:
     file_sd_configs:
       - files:
           - /home/frappe/prometheus/file_sd/sites.yml
+    static_configs:
+      - targets: ['https://{{ press_app_server }}/api/method/ping']
 
   - job_name: domain
     scrape_interval: 15m

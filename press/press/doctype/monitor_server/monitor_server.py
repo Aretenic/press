@@ -61,7 +61,7 @@ class MonitorServer(BaseServer):
 		private_vlan_id: DF.Data | None
 		prometheus_data_directory: DF.Data | None
 		prometheus_username: DF.Data | None
-		provider: DF.Literal["Generic", "Scaleway", "AWS EC2", "OCI"]
+		provider: DF.Literal["Generic", "Scaleway", "AWS EC2", "OCI", "Vultr"]
 		root_public_key: DF.Code | None
 		ssh_port: DF.Int
 		ssh_user: DF.Data | None
@@ -148,6 +148,7 @@ class MonitorServer(BaseServer):
 					"monitoring_password": monitoring_password,
 					"press_monitoring_password": press_monitoring_password,
 					"press_app_server": frappe.local.site,
+					"press_host_exporters": settings.press_host_exporters or "Full",
 					"press_db_server": f"db.{frappe.local.site}",
 					"press_db_replica_server": f"db2.{frappe.local.site}" if frappe.conf.replica_host else "",
 					"press_url": press_url,
@@ -226,6 +227,7 @@ class MonitorServer(BaseServer):
 					"monitoring_password": monitoring_password,
 					"press_monitoring_password": press_monitoring_password,
 					"press_app_server": frappe.local.site,
+					"press_host_exporters": settings.press_host_exporters or "Full",
 					"press_db_server": f"db.{frappe.local.site}",
 					"press_db_replica_server": f"db2.{frappe.local.site}" if frappe.conf.replica_host else "",
 					"registries_json": json.dumps(registries),
