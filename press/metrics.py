@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 import frappe
 from frappe.utils import add_to_date, cint, get_datetime, get_system_timezone
 from prometheus_client import (
+	CONTENT_TYPE_LATEST,
 	CollectorRegistry,
 	Gauge,
 	generate_latest,
@@ -188,10 +189,8 @@ class MetricsRenderer:
 	def render(self):
 		if not self.is_authorized():
 			return Response("Unauthorized", status=401, headers={"WWW-Authenticate": 'Basic realm="metrics"'})
-		response = Response()
-		response.mimetype = "text"
-		response.data = self.metrics()
-		return response
+		# Aretenic: Prometheus 3 rejects the old "text" mimetype without a fallback protocol
+		return Response(self.metrics(), content_type=CONTENT_TYPE_LATEST)
 
 	def is_authorized(self) -> bool:
 		"""Aretenic (ADR 043 §1): the monitor sends Press Settings' monitoring password in X-Metrics-Token.
