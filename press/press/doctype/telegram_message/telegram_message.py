@@ -80,15 +80,17 @@ class TelegramMessage(Document):
 
 	@staticmethod
 	def get_one() -> "TelegramMessage | None":
-		first = frappe.get_all(
-			"Telegram Message",
-			filters={"status": "Queued"},
-			order_by="FIELD(priority, 'High', 'Medium', 'Low'), creation ASC",
-			limit=1,
-			pluck="name",
-		)
-		if first:
-			return frappe.get_doc("Telegram Message", first[0])
+		# Aretenic: Frappe v15 rejects FIELD() in order_by, so pick the oldest message per priority in turn
+		for priority in ("High", "Medium", "Low"):
+			first = frappe.get_all(
+				"Telegram Message",
+				filters={"status": "Queued", "priority": priority},
+				order_by="creation asc",
+				limit=1,
+				pluck="name",
+			)
+			if first:
+				return frappe.get_doc("Telegram Message", first[0])
 		return None
 
 	@staticmethod
