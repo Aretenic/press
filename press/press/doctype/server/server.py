@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import contextlib
 import datetime
+import hashlib
 import ipaddress
 import json
 import random
@@ -935,6 +936,10 @@ class BaseServer(Document, TagHelpers):
 	def install_wazuh_agent(self):
 		if not is_wazuh_configured():
 			frappe.throw("Please configure Wazuh Server and Wazuh Agent Version in Press Settings")
+		# Stamped before the enqueue, so a server we cannot even queue still yields its turn
+		frappe.db.set_value(
+			self.doctype, self.name, "wazuh_install_last_attempt", frappe.utils.now_datetime()
+		)
 		frappe.enqueue_doc(
 			self.doctype,
 			self.name,
@@ -959,13 +964,14 @@ class BaseServer(Document, TagHelpers):
 					"wazuh_manager": wazuh_server,
 					"wazuh_agent_name": self.name,
 					"wazuh_agent_version": wazuh_agent_version,
+					# Re-register even if a stale key is left over, the manager has dropped us
+					"wazuh_force_enrollment": self.wazuh_agent_status == UNREGISTERED_WAZUH_AGENT_STATUS,
 				},
 			)
 			play = ansible.run()
-			self.reload()
 			if play.status == "Success":
-				self.is_wazuh_agent_installed = True
-				self.save()
+				# Not save(), so an unrelated validation error cannot hide a successful play
+				frappe.db.set_value(self.doctype, self.name, "is_wazuh_agent_installed", True)
 		except Exception:
 			log_error("Wazuh Agent Install Exception", server=self.as_dict())
 
@@ -990,11 +996,12 @@ class BaseServer(Document, TagHelpers):
 				port=self._ssh_port(),
 			)
 			play = ansible.run()
-			self.reload()
 			if play.status == "Success":
-				self.is_wazuh_agent_installed = False
-				self.wazuh_agent_status = None
-				self.save()
+				frappe.db.set_value(
+					self.doctype,
+					self.name,
+					{"is_wazuh_agent_installed": False, "wazuh_agent_status": None},
+				)
 		except Exception:
 			log_error("Wazuh Agent Uninstall Exception", server=self.as_dict())
 
@@ -1026,6 +1033,24 @@ class BaseServer(Document, TagHelpers):
 		except Exception:
 			log_error("Server Ping Exception", server=self.as_dict())
 			return None
+
+	@frappe.whitelist()
+	def restore_truncated_configs_ansible(self):
+		frappe.enqueue_doc(self.doctype, self.name, "restore_truncated_configs", queue="long", timeout=1200)
+
+	def restore_truncated_configs(self, wait_for_reboot: bool = False) -> AnsiblePlay:
+		"""Restore the config files that a truncated write left unreadable."""
+		ansible = Ansible(
+			playbook="restore_truncated_configs.yml",
+			server=self,
+			user=self._ssh_user(),
+			port=self._ssh_port(),
+			variables={"wait_for_reboot": wait_for_reboot},
+		)
+		play = ansible.run()
+		if play.status != "Success":
+			frappe.throw(f"Failed to restore truncated configs on server: {self.name}")
+		return play
 
 	@frappe.whitelist()
 	def update_agent_ansible(self):
@@ -2005,6 +2030,15 @@ class BaseServer(Document, TagHelpers):
 		console.save()
 		console.reload()
 		console.run_sysrq()
+		# TODO: Enable after a manual trial with the button on Server
+		# frappe.enqueue_doc(
+		# self.doctype,
+		# self.name,
+		# "restore_truncated_configs",
+		# wait_for_reboot=True,
+		# queue="long",
+		# timeout=1200,
+		# )
 
 	@dashboard_whitelist()
 	def reboot(self):
@@ -2018,6 +2052,15 @@ class BaseServer(Document, TagHelpers):
 			raise NotImplementedError
 		virtual_machine = frappe.get_doc("Virtual Machine", self.virtual_machine)
 		virtual_machine.reboot()
+		# TODO: Enable after a manual trial with the button on Server
+		# frappe.enqueue_doc(
+		# self.doctype,
+		# self.name,
+		# "restore_truncated_configs",
+		# wait_for_reboot=True,
+		# queue="long",
+		# timeout=1200,
+		# )
 
 	@dashboard_whitelist()
 	def rename(self, title):
@@ -3168,6 +3211,7 @@ class Server(BaseServer):
 		is_upstream_setup: DF.Check
 		is_wazuh_agent_installed: DF.Check
 		wazuh_agent_status: DF.Data | None
+		wazuh_install_last_attempt: DF.Datetime | None
 		keep_files_on_server_in_offsite_backup: DF.Check
 		managed_database_service: DF.Link | None
 		mounts: DF.Table[ServerMount]
@@ -4502,6 +4546,115 @@ class Server(BaseServer):
 		# Return the next server plan document
 		return frappe.get_doc("Server Plan", next_plan)
 
+	def teams_with_active_sites(self) -> dict[str, list[str]]:
+		"""Map each team to the names of its non-archived sites on this server.
+
+		Suspended sites are included: suspending only disables a site, its files and database
+		stay on the server, so it is lost when the server is decommissioned unless it is moved
+		or archived first. Only archived sites (already dropped from the server) are excluded.
+		"""
+		sites = frappe.get_all(
+			"Site",
+			filters={"server": self.name, "status": ("!=", "Archived")},
+			fields=["name", "team"],
+		)
+		teams: dict[str, list[str]] = {}
+		for site in sites:
+			if site.team:
+				teams.setdefault(site.team, []).append(site.name)
+		return teams
+
+	def decommission_notice_message_id(self, team: str, args: dict) -> str:
+		"""Deterministic Message-Id for the notice, unique per team and set of parameters.
+
+		Used as the idempotency key: the same notice with the same parameters to the same team
+		yields the same id, so a re-run finds the earlier Email Queue row and skips, while any
+		changed parameter (e.g. a new deadline) yields a new id that sends again.
+		"""
+		payload = json.dumps({"team": team, **args}, sort_keys=True, default=str)
+		digest = hashlib.sha256(payload.encode()).hexdigest()[:24]
+		return f"decommission-notice-{digest}@frappecloud.com"
+
+	def check_duplicate_dispatch_within_days(self, message_id: str, days: int) -> frappe._dict | None:
+		"""Return the most recent dispatch of this exact notice within `days`, else None.
+
+		Keyed on the Message-Id (a real, queryable Email Queue column that we set), so the
+		match is exact. Only sent or in-flight rows count; a failed ("Error") send does not
+		suppress a retry.
+		"""
+		since = frappe.utils.add_days(frappe.utils.now_datetime(), -days)
+		dispatches = frappe.get_all(
+			"Email Queue",
+			filters={
+				"message_id": message_id,
+				"status": ("in", ["Not Sent", "Sending", "Sent", "Partially Sent"]),
+				"creation": (">", since),
+			},
+			fields=["name", "creation"],
+			order_by="creation desc",
+			limit=1,
+		)
+		return dispatches[0] if dispatches else None
+
+	def notify_teams_before_decommission(
+		self,
+		deadline: str,
+		migration_window: str,
+		migration_start_time: str,
+		expected_downtime: str,
+		reason: str = "It runs on DigitalOcean and has reached its disk capacity limits.",
+		recommended_destination: str | None = None,
+		action_url: str = "https://cloud.frappe.io/dashboard",
+		duplicate_window_days: int = 15,
+		verbose: bool = False,
+	):
+		"""Email every team with active sites here that this server is being decommissioned.
+
+		Meant to be run from the console for a shared server that is going away, so that
+		customers can migrate their sites before the automatic migration window. Idempotent
+		within duplicate_window_days: a team already sent the same notice in that window is skipped.
+		Pass verbose=True to print progress per team.
+		"""
+		subject = f"We're moving your site off {self.name} to a new server"
+		args = {
+			"server": self.name,
+			"action_url": action_url,
+			"deadline": deadline,
+			"migration_window": migration_window,
+			"migration_start_time": migration_start_time,
+			"expected_downtime": expected_downtime,
+			"reason": reason,
+			"recommended_destination": recommended_destination,
+		}
+		teams = self.teams_with_active_sites()
+		if verbose:
+			print(f"Notifying {len(teams)} team(s) with active sites on {self.name}")
+		for team, sites in teams.items():
+			message_id = self.decommission_notice_message_id(team, args)
+			duplicate = self.check_duplicate_dispatch_within_days(message_id, duplicate_window_days)
+			if duplicate:
+				if verbose:
+					sent_on = frappe.utils.formatdate(duplicate.creation)
+					link = frappe.utils.get_url_to_form("Email Queue", duplicate.name)
+					print(f"  {team}: not sending this as already sent on ({sent_on}) [{link}]")
+				continue
+			recipients = get_communication_info("Email", "General", "Team", team)
+			if not recipients:
+				if verbose:
+					print(f"  skipped {team}: no recipients for {len(sites)} site(s)")
+				continue
+			frappe.sendmail(
+				recipients=recipients,
+				subject=subject,
+				template="server_decommission_migration",
+				args={**args, "site_name": ", ".join(sites), "site_count": len(sites)},
+				reference_doctype="Team",
+				reference_name=team,
+				message_id=message_id,
+			)
+			if verbose:
+				print(f"  queued {team}: {len(sites)} site(s) -> {', '.join(recipients)}")
+
 
 def scale_workers(now=False):
 	servers = frappe.get_all("Server", {"status": "Active", "is_primary": True})
@@ -4561,6 +4714,9 @@ WAZUH_SERVER_TYPES = (
 	"NFS Server",
 )
 WAZUH_INSTALL_BATCH_SIZE = 20
+# The manager holds no record of the agent, so the install never registered it. A "never_connected"
+# agent is registered and simply cannot reach the manager, which no re-install repairs.
+UNREGISTERED_WAZUH_AGENT_STATUS = "unknown"
 
 
 def is_wazuh_configured() -> bool:
@@ -4571,23 +4727,48 @@ def is_wazuh_configured() -> bool:
 
 
 def install_missing_wazuh_agents():
-	"""Install the Wazuh agent on a random batch of active servers that do not have it."""
+	"""Install the Wazuh agent on the active servers that have waited longest for a working one."""
 	if not is_wazuh_configured():
 		return
-	# Random, so servers whose install keeps failing cannot take every batch
-	servers = servers_missing_wazuh_agent()
-	for server_type, name in random.sample(servers, min(len(servers), WAZUH_INSTALL_BATCH_SIZE)):
-		frappe.get_doc(server_type, name).install_wazuh_agent()
+	for server_type, name in servers_needing_wazuh_agent()[:WAZUH_INSTALL_BATCH_SIZE]:
+		try:
+			frappe.get_doc(server_type, name).install_wazuh_agent()
+		except Exception:
+			# A full queue or one broken server must not take the rest of the batch with it
+			log_error("Wazuh Agent Enqueue Exception", server_type=server_type, server=name)
 
 
-def servers_missing_wazuh_agent() -> list[tuple[str, str]]:
-	servers = []
+def servers_needing_wazuh_agent() -> list[tuple[str, str]]:
+	"""Active servers with no agent, and those the manager has no record of despite the flag.
+
+	Longest wait first, so a server that keeps failing cannot outrank one never tried.
+	"""
+	or_filters = {
+		"is_wazuh_agent_installed": 0,
+		"wazuh_agent_status": UNREGISTERED_WAZUH_AGENT_STATUS,
+	}
+	candidates = []
 	for server_type in WAZUH_SERVER_TYPES:
-		filters = {"status": "Active", "is_server_setup": 1, "is_wazuh_agent_installed": 0}
+		filters = {"status": "Active", "is_server_setup": 1}
 		if frappe.get_meta(server_type).has_field("is_self_hosted"):
 			filters["is_self_hosted"] = 0
-		servers += [(server_type, name) for name in frappe.get_all(server_type, filters, pluck="name")]
-	return servers
+		candidates += [
+			(server.wazuh_install_last_attempt, server_type, server.name)
+			for server in frappe.get_all(
+				server_type,
+				filters=filters,
+				or_filters=or_filters,
+				fields=["name", "wazuh_install_last_attempt"],
+				order_by="wazuh_install_last_attempt asc",
+				limit=WAZUH_INSTALL_BATCH_SIZE,
+			)
+		]
+	# Every server starts with no attempt recorded, and a stable sort would leave those ties in
+	# WAZUH_SERVER_TYPES order, letting "Server" take every batch until it runs out.
+	random.shuffle(candidates)
+	# Never attempted first, then the longest wait. None does not compare to a datetime.
+	candidates.sort(key=lambda candidate: (candidate[0] is not None, candidate[0]))
+	return [(server_type, name) for _, server_type, name in candidates]
 
 
 def sync_wazuh_agent_status():
@@ -4601,7 +4782,7 @@ def sync_wazuh_agent_status():
 		return
 	for server_type in WAZUH_SERVER_TYPES:
 		filters = {"is_wazuh_agent_installed": 1, "status": ("!=", "Archived")}
-		for name in frappe.get_all(server_type, filters, pluck="name"):
+		for name in frappe.get_all(server_type, filters=filters, pluck="name"):
 			frappe.db.set_value(server_type, name, "wazuh_agent_status", statuses.get(name, "unknown"))
 
 
