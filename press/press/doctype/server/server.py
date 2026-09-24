@@ -936,10 +936,9 @@ class BaseServer(Document, TagHelpers):
 	def install_wazuh_agent(self):
 		if not is_wazuh_configured():
 			frappe.throw("Please configure Wazuh Server and Wazuh Agent Version in Press Settings")
-		# Stamped before the enqueue, so a server we cannot even queue still yields its turn
-		frappe.db.set_value(
-			self.doctype, self.name, "wazuh_install_last_attempt", frappe.utils.now_datetime()
-		)
+		# Stamped before the enqueue, so a server we cannot even queue still yields its turn.
+		# db_set, not frappe.db.set_value, so a later self.save() sees the new modified
+		self.db_set("wazuh_install_last_attempt", frappe.utils.now_datetime())
 		frappe.enqueue_doc(
 			self.doctype,
 			self.name,
@@ -2615,9 +2614,10 @@ node_filesystem_avail_bytes{{instance="{self.name}", mountpoint="{mountpoint}"}}
 		self,
 		mountpoint: str,
 		additional: int = 0,
-	):
+	) -> bool:
 		"""
 		Calculate required disk increase for servers and handle notifications accordingly.
+		Returns True if the disk was increased, False if it was left as is.
 				- For servers with `auto_increase_storage` enabled:
 					- Compute the required storage increase.
 					- Automatically apply the increase.
@@ -2656,7 +2656,7 @@ node_filesystem_avail_bytes{{instance="{self.name}", mountpoint="{mountpoint}"}}
 				server=server.name if server.name[0] == "f" else None,
 			)
 
-			return
+			return False
 
 		TelegramMessage.enqueue(
 			f"Increasing disk (mount point {mountpoint}) on "
@@ -2672,6 +2672,7 @@ node_filesystem_avail_bytes{{instance="{self.name}", mountpoint="{mountpoint}"}}
 			is_auto_triggered=True,
 			current_disk_usage=current_disk_usage,
 		)
+		return True
 
 	def prune_docker_system(self):
 		frappe.enqueue_doc(

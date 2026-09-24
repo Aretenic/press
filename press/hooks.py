@@ -369,6 +369,7 @@ scheduler_events = {
 			"press.press.doctype.site.site.archive_suspended_sites",
 		],
 		"*/5 * * * *": [
+			"press.press.doctype.virtual_disk_snapshot.virtual_disk_snapshot.enqueue_delete_orphaned_dedicated_snapshots",
 			"press.press.doctype.version_upgrade.version_upgrade.update_from_site_update",
 			"press.press.doctype.site_replication.site_replication.update_from_site",
 			"press.press.doctype.virtual_disk_snapshot.virtual_disk_snapshot.sync_snapshots",

@@ -4640,7 +4640,7 @@ class Site(Document, TagHelpers):
 			region.inbound_ip = self.inbound_ip_in_cluster(region.name)
 
 		return {
-			"has_recent_failed_migration": self.has_recent_failed_migration(),
+			"recent_failed_migration_servers": self.recent_failed_migration_servers(),
 			"In-Place Migrate Site": {
 				"hidden": False,
 				"allow_scheduling": False,
@@ -4669,15 +4669,17 @@ class Site(Document, TagHelpers):
 			},
 		}
 
-	def has_recent_failed_migration(self) -> bool:
-		# A failed move leaves restore files behind, so a retry hits the space pre-check.
-		return frappe.db.exists(
+	def recent_failed_migration_servers(self) -> list[str]:
+		# A failed move leaves restore files on its destination, so a retry there hits the space pre-check.
+		return frappe.get_all(
 			"Site Migration",
-			{
+			filters={
 				"site": self.name,
 				"status": "Failure",
 				"creation": (">", frappe.utils.add_to_date(frappe.utils.now(), days=-1)),
 			},
+			pluck="destination_server",
+			distinct=True,
 		)
 
 	@property
@@ -5809,6 +5811,7 @@ def create_subscription_for_trial_sites():
 		.left_join(ProductTrial)
 		.on(ProductTrialRequest.product_trial == ProductTrial.name)
 		.where(ProductTrialRequest.is_subscription_created == 0)
+		.where(ProductTrialRequest.site != "")
 		.where(SitePlanChange.name.isnull())
 		.where(ProductTrialRequest.status == "Site Created")
 		.limit(25)
