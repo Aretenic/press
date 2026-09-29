@@ -1,0 +1,4 @@
+# ARETENIC: we own the Site Plan fixture outright (ADR 045a in Aretenic/aretenic). Upstream's copy
+# ships Frappe Cloud's catalogue, and fixtures are force-reimported on every migrate, so an upstream
+# edit to this file must never merge in. Needs, once per clone: git config merge.ours.driver true
+press/fixtures/site_plan.json merge=ours
