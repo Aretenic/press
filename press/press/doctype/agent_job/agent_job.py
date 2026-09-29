@@ -677,29 +677,26 @@ def fail_old_jobs():
 			process_job_updates(job)
 		frappe.db.commit()
 
-	failed_jobs = frappe.db.get_all(
-		"Agent Job",
+	# Aretenic: Frappe v15 rejects RAND() in order_by (frappe/press#7588), so sample in Python
+	def pick_random(filters: dict) -> list[str]:
+		jobs = frappe.db.get_all("Agent Job", filters, pluck="name")
+		return random.sample(jobs, min(len(jobs), 100))
+
+	failed_jobs = pick_random(
 		{
 			"status": ("in", ["Pending", "Running"]),
 			"job_id": ("!=", 0),
 			"creation": ("<", add_days(None, -2)),
-		},
-		limit=100,
-		order_by="RAND()",
-		pluck="name",
+		}
 	)
 	update_status(failed_jobs, "Failure")
 
-	delivery_failed_jobs = frappe.db.get_all(
-		"Agent Job",
+	delivery_failed_jobs = pick_random(
 		{
 			"job_id": 0,
 			"creation": ("<", add_days(None, -2)),
 			"status": ("!=", "Delivery Failure"),
-		},
-		limit=100,
-		order_by="RAND()",
-		pluck="name",
+		}
 	)
 
 	update_status(delivery_failed_jobs, "Delivery Failure")

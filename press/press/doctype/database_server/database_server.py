@@ -3102,8 +3102,9 @@ def delete_mariadb_binlog_for_archived_servers():
 	"""
 	Delete binlog records for archived servers
 	"""
+	# Aretenic: upstream queried a "MariaDB Server" doctype that does not exist
 	archived_servers = frappe.get_all(
-		"MariaDB Server",
+		"Database Server",
 		filters={"status": "Archived", "binlogs_removed": 0},
 		pluck="name",
 	)
@@ -3114,7 +3115,8 @@ def delete_mariadb_binlog_for_archived_servers():
 		frappe.enqueue_doc(
 			"Database Server",
 			server,
-			"delete_all_mariadb_binlog_records",
+			# Aretenic: the public method only re-enqueues itself; this one deletes
+			"_delete_all_mariadb_binlog_records",
 			enqueue_after_commit=True,
 			queue="long",
 			job_id=f"delete_mariadb_binlog_records||{server}",
