@@ -460,7 +460,9 @@ def notify_custom_tls_renewal():
 def update_server_tls_certifcate(server, certificate, throw_on_failure: bool = False):
 	try:
 		proxysql_admin_password = None
-		if server.doctype == "Proxy Server":
+		# Aretenic: the password is generated even when ProxySQL is never installed, so without
+		# this check the play fails on /home/frappe/proxysql and the daily retry repeats it
+		if server.doctype == "Proxy Server" and server.is_proxysql_setup:
 			proxysql_admin_password = server.get_password("proxysql_admin_password")
 		ansible = Ansible(
 			playbook="tls.yml",
