@@ -5442,6 +5442,9 @@ def prepare_site(site: str, subdomain: str | None = None) -> dict:
 		"plan": doc.plan,
 		"name": site_name,
 		"group": doc.group,
+		# Aretenic: without it _new falls back to Press Settings.cluster, and the replica fails
+		# set_bench_for_server whenever that differs from the source bench's cluster
+		"cluster": doc.cluster,
 		"selected_app_plans": {},
 		"apps": app_plans,
 		"files": files,
