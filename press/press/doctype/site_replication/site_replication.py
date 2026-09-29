@@ -32,7 +32,10 @@ class SiteReplication(Document):
 
 	def validate(self):
 		self.validate_duplicate()
-		self.validate_site_name()
+		# Aretenic: after_insert creates the site and then saves, so re-checking the name there
+		# always finds the replica just created
+		if self.is_new():
+			self.validate_site_name()
 
 	def validate_duplicate(self):
 		# check for already running site replication
