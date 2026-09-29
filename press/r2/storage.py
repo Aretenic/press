@@ -264,4 +264,7 @@ def get_press_s3_credentials(probe_bucket: str) -> tuple[str, str]:
 	# Written directly: saving Press Settings would re-run validations unrelated to R2
 	frappe.db.set_single_value("Press Settings", "r2_press_access_key_id", access_key_id)
 	set_encrypted_password("Press Settings", "Press Settings", secret, "r2_press_secret_access_key")
+	# The masked placeholder is what a later Press Settings save keeps; left empty, that save
+	# deletes the __Auth row and the next media backup mints a new key
+	frappe.db.set_single_value("Press Settings", "r2_press_secret_access_key", "*" * len(secret))
 	return access_key_id, secret
