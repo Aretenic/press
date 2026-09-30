@@ -574,6 +574,11 @@ class Site(Document, TagHelpers):
 		# Buckets and keys come first, so a school never exists without its backup bucket
 		ensure_site_storage(self)
 
+		from press.geocoding.tokens import ensure_site_geocoding
+
+		# ARETENIC (ADR 053 §3): a seminary site starts with its geocoding token in its config
+		ensure_site_geocoding(self)
+
 		if not self.setup_wizard_status_check_next_retry_on:
 			self.setup_wizard_status_check_next_retry_on = now_datetime()
 
@@ -5113,7 +5118,11 @@ def process_archive_site_job_update(job: "AgentJob"):
 	update_finished_backup_restoration_test(str(job.site), updated_status)
 	if updated_status != "Archived":
 		return
+	from press.geocoding.tokens import revoke
 	from press.press.doctype.site_backup.site_backup import _create_site_backup_from_agent_job
+
+	# ARETENIC (ADR 053 §5): before cleanup renames the site to <name>.archived
+	revoke(str(job.site), "Site archived")
 
 	_create_site_backup_from_agent_job(job)
 
@@ -5144,6 +5153,11 @@ def process_install_app_site_job_update(job):
 	if job.status == "Success":
 		# Always sync apps on success to ensure installed app is shown
 		site.sync_apps()
+
+		from press.geocoding.tokens import ensure_site_geocoding
+
+		# ARETENIC (ADR 053 §3): installing seminary on an existing site issues its token
+		ensure_site_geocoding(site)
 
 	if updated_status != site.status:
 		frappe.db.set_value("Site", job.site, "status", updated_status)
@@ -5312,6 +5326,12 @@ def process_rename_site_job_update(job):  # noqa: C901
 		# update job obj with new name
 		job.reload()
 		updated_status = "Active"
+
+		from press.geocoding.tokens import provision
+
+		# ARETENIC (ADR 053 §5): a renamed site gets a new token; the old one named the old site
+		if frappe.db.exists("Geocoding Token", {"site": job.site, "status": "Active"}):
+			provision(Site("Site", job.site), reason="Site renamed")
 
 	elif "Failure" in (first, second):
 		updated_status = "Broken"

@@ -532,6 +532,12 @@ class SiteMigration(Document):
 		self.save()
 		self.send_success_notification()
 
+		from press.geocoding.tokens import provision
+
+		# ARETENIC (ADR 053 §5): a moved site gets a new token on its new server
+		if frappe.db.exists("Geocoding Token", {"site": self.site, "status": "Active"}):
+			provision(frappe.get_doc("Site", self.site), reason="Site moved")
+
 	def send_success_notification(self):
 		site = Site("Site", self.site)
 

@@ -84,6 +84,9 @@
 		"r2_press_access_key_id",
 		"r2_press_secret_access_key",
 		"r2_config_age_recipient",
+		"geocoding_section",
+		"geocoding_api_key",
+		"geocoding_base_url",
 		"backups_section",
 		"backup_interval",
 		"backup_offset",
@@ -2001,11 +2004,28 @@
 			"fieldname": "r2_config_age_recipient",
 			"fieldtype": "Data",
 			"label": "Config Backup age Public Key"
+		},
+		{
+			"fieldname": "geocoding_section",
+			"fieldtype": "Section Break",
+			"label": "Geocoding"
+		},
+		{
+			"description": "Google key restricted to this host's IPs and to the Geocoding and Places (New) APIs. Only this host sends it to Google; sites get their own tokens.",
+			"fieldname": "geocoding_api_key",
+			"fieldtype": "Password",
+			"label": "Google Geocoding API Key"
+		},
+		{
+			"description": "The proxy's public URL, written into each seminary site's config, e.g. https://geo.aretenic.com. Leave empty to issue no tokens.",
+			"fieldname": "geocoding_base_url",
+			"fieldtype": "Data",
+			"label": "Geocoding Proxy URL"
 		}
 	],
 	"issingle": 1,
 	"links": [],
-	"modified": "2026-09-16 10:00:00.000000",
+	"modified": "2026-09-30 12:00:00.000000",
 	"modified_by": "Administrator",
 	"module": "Press",
 	"name": "Press Settings",

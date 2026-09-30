@@ -22,6 +22,8 @@
 		"cpu_time_per_day",
 		"max_database_usage",
 		"max_storage_usage",
+		"geocoding_daily_limit",
+		"geocoding_monthly_limit",
 		"column_break_13",
 		"is_trial_plan",
 		"is_frappe_plan",
@@ -121,6 +123,20 @@
 			"fieldname": "max_storage_usage",
 			"fieldtype": "Int",
 			"label": "Max Storage Usage (MiB)"
+		},
+		{
+			"default": "0",
+			"description": "Calls a site may make to the geocoding proxy per day, counting each address-autocomplete request. 0 means none.",
+			"fieldname": "geocoding_daily_limit",
+			"fieldtype": "Int",
+			"label": "Geocoding Calls per Day"
+		},
+		{
+			"default": "0",
+			"description": "Calls a site may make to the geocoding proxy per calendar month. 0 means no monthly ceiling beyond the daily one.",
+			"fieldname": "geocoding_monthly_limit",
+			"fieldtype": "Int",
+			"label": "Geocoding Calls per Month"
 		},
 		{
 			"fieldname": "column_break_13",
@@ -305,7 +321,7 @@
 	"grid_page_length": 50,
 	"index_web_pages_for_search": 1,
 	"links": [],
-	"modified": "2026-07-14 10:29:13.886035",
+	"modified": "2026-09-30 12:00:00.000000",
 	"modified_by": "Administrator",
 	"module": "Press",
 	"name": "Site Plan",

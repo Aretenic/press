@@ -167,6 +167,8 @@ class PressSettings(Document):
 		frappeio_api_secret: DF.Password | None
 		free_credits_inr: DF.Currency
 		free_credits_usd: DF.Currency
+		geocoding_api_key: DF.Password | None
+		geocoding_base_url: DF.Data | None
 		github_access_token: DF.Data | None
 		github_app_client_id: DF.Data | None
 		github_app_client_secret: DF.Data | None

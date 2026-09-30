@@ -485,6 +485,8 @@ override_doctype_class = {"User": "press.overrides.CustomUser"}
 on_login = "press.overrides.on_login"
 
 before_request = [
+	# ARETENIC (ADR 053): first, so no other hook sees a proxy token as a login attempt
+	"press.geocoding.proxy.before_request",
 	"press.overrides.before_request",
 	"press.telemetry.monitor.add_user_context",
 	"press.telemetry.sentry.add_user_context",
@@ -501,7 +503,7 @@ user_data_fields = [
 
 auth_hooks = ["press.auth.hook"]
 
-page_renderer = ["press.metrics.MetricsRenderer"]
+page_renderer = ["press.metrics.MetricsRenderer", "press.geocoding.proxy.GeocodingProxyRenderer"]
 
 export_python_type_annotations = True
 

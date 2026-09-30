@@ -1,0 +1,97 @@
+{
+	"actions": [],
+	"creation": "2026-09-30 12:00:00.000000",
+	"description": "Calls a site made to the geocoding proxy in one day. Counts only: no address or place is stored.",
+	"doctype": "DocType",
+	"engine": "InnoDB",
+	"field_order": [
+		"site",
+		"date",
+		"calls",
+		"column_break_1",
+		"geocode",
+		"autocomplete",
+		"details",
+		"refused"
+	],
+	"fields": [
+		{
+			"fieldname": "site",
+			"fieldtype": "Link",
+			"in_list_view": 1,
+			"in_standard_filter": 1,
+			"label": "Site",
+			"options": "Site",
+			"read_only": 1,
+			"search_index": 1
+		},
+		{
+			"fieldname": "date",
+			"fieldtype": "Date",
+			"in_list_view": 1,
+			"in_standard_filter": 1,
+			"label": "Date",
+			"read_only": 1,
+			"search_index": 1
+		},
+		{
+			"fieldname": "calls",
+			"fieldtype": "Int",
+			"in_list_view": 1,
+			"label": "Calls",
+			"read_only": 1
+		},
+		{
+			"fieldname": "column_break_1",
+			"fieldtype": "Column Break"
+		},
+		{
+			"fieldname": "geocode",
+			"fieldtype": "Int",
+			"label": "Geocode",
+			"read_only": 1
+		},
+		{
+			"fieldname": "autocomplete",
+			"fieldtype": "Int",
+			"label": "Autocomplete",
+			"read_only": 1
+		},
+		{
+			"fieldname": "details",
+			"fieldtype": "Int",
+			"label": "Place Details",
+			"read_only": 1
+		},
+		{
+			"fieldname": "refused",
+			"fieldtype": "Int",
+			"label": "Refused Over Quota",
+			"read_only": 1
+		}
+	],
+	"in_create": 1,
+	"index_web_pages_for_search": 0,
+	"links": [],
+	"modified": "2026-09-30 12:00:00.000000",
+	"modified_by": "Administrator",
+	"module": "Press",
+	"name": "Geocoding Usage",
+	"owner": "Administrator",
+	"permissions": [
+		{
+			"delete": 1,
+			"email": 1,
+			"export": 1,
+			"print": 1,
+			"read": 1,
+			"report": 1,
+			"role": "System Manager",
+			"share": 1
+		}
+	],
+	"sort_field": "date",
+	"sort_order": "DESC",
+	"states": [],
+	"autoname": "Prompt"
+}

@@ -31,6 +31,8 @@ class SitePlan(Plan):
 		disk: DF.Int
 		document_type: DF.Link
 		enabled: DF.Check
+		geocoding_daily_limit: DF.Int
+		geocoding_monthly_limit: DF.Int
 		instance_type: DF.Data | None
 		interval: DF.Literal["Daily", "Monthly", "Annually"]
 		is_frappe_plan: DF.Check

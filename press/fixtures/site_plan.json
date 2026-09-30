@@ -44,6 +44,8 @@
    }
   ],
   "support_included": 0,
-  "vcpu": 0
+  "vcpu": 0,
+  "geocoding_daily_limit": 70,
+  "geocoding_monthly_limit": 300
  }
 ]
