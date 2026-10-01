@@ -1,0 +1,89 @@
+{
+ "actions": [],
+ "creation": "2026-10-02 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "step",
+  "step_key",
+  "title",
+  "status",
+  "agent_job",
+  "started",
+  "finished",
+  "error"
+ ],
+ "fields": [
+  {
+   "fieldname": "step",
+   "fieldtype": "Int",
+   "label": "Step",
+   "in_list_view": 1,
+   "read_only": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "step_key",
+   "fieldtype": "Data",
+   "label": "Key",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Pending\nRunning\nSuccess\nFailure\nSkipped",
+   "default": "Pending",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "agent_job",
+   "fieldtype": "Link",
+   "options": "Agent Job",
+   "label": "Agent Job",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "started",
+   "fieldtype": "Datetime",
+   "label": "Started",
+   "read_only": 1
+  },
+  {
+   "fieldname": "finished",
+   "fieldtype": "Datetime",
+   "label": "Finished",
+   "read_only": 1
+  },
+  {
+   "fieldname": "error",
+   "fieldtype": "Small Text",
+   "label": "Error",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-02 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Press",
+ "name": "School Provisioning Step",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "istable": 1,
+ "editable_grid": 0
+}

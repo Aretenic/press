@@ -309,6 +309,7 @@ scheduler_events = {
 	"all": [
 		"press.auth.flush",
 		"press.press.doctype.site.sync.sync_setup_wizard_status",
+		"press.school_provisioning.pipeline.advance_running",
 		"press.press.doctype.agent_job.agent_job.flush",
 	],
 	"cron": {
@@ -575,4 +576,5 @@ after_migrate = [
 	"press.overrides.before_after_migrate",
 	"press.api.account.clear_country_list_cache",
 	"press.sanity.checks",
+	"press.school_provisioning.install.ensure_role",
 ]
