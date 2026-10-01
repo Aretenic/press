@@ -1,0 +1,83 @@
+{
+ "actions": [],
+ "creation": "2026-10-02 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "agora_section",
+  "agora_url",
+  "agora_api_key",
+  "agora_api_secret",
+  "teams_section",
+  "team_user_domain",
+  "groups_section",
+  "release_groups"
+ ],
+ "fields": [
+  {
+   "fieldname": "agora_section",
+   "fieldtype": "Section Break",
+   "label": "agora",
+   "description": "Where provisioning status is posted: aretenic.com, as a user holding only the Press Provisioning role there."
+  },
+  {
+   "fieldname": "agora_url",
+   "fieldtype": "Data",
+   "options": "URL",
+   "label": "agora URL"
+  },
+  {
+   "fieldname": "agora_api_key",
+   "fieldtype": "Data",
+   "label": "API Key"
+  },
+  {
+   "fieldname": "agora_api_secret",
+   "fieldtype": "Password",
+   "label": "API Secret"
+  },
+  {
+   "fieldname": "teams_section",
+   "fieldtype": "Section Break",
+   "label": "Teams"
+  },
+  {
+   "fieldname": "team_user_domain",
+   "fieldtype": "Data",
+   "label": "Team User Domain",
+   "description": "Each school's team is owned by <subdomain>@ this domain: a user we hold, with no password and no roles."
+  },
+  {
+   "fieldname": "groups_section",
+   "fieldtype": "Section Break",
+   "label": "Release Groups Open to Schools"
+  },
+  {
+   "fieldname": "release_groups",
+   "fieldtype": "Table",
+   "options": "School Provisioning Group",
+   "label": "Release Groups"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-02 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Press",
+ "name": "School Provisioning Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "print": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "issingle": 1
+}

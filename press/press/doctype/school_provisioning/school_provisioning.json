@@ -1,0 +1,151 @@
+{
+ "actions": [],
+ "creation": "2026-10-02 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "onboarding",
+  "status",
+  "subdomain",
+  "column_break_head",
+  "team",
+  "site",
+  "cluster",
+  "release_group",
+  "plan",
+  "steps_section",
+  "steps",
+  "spec_section",
+  "spec",
+  "provisioning_token"
+ ],
+ "fields": [
+  {
+   "fieldname": "onboarding",
+   "fieldtype": "Data",
+   "label": "Onboarding",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1,
+   "read_only": 1,
+   "description": "The School Onboarding on aretenic.com this spec came from."
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Running\nFailed\nLive",
+   "default": "Running",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "subdomain",
+   "fieldtype": "Data",
+   "label": "Subdomain",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_head",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "team",
+   "fieldtype": "Link",
+   "options": "Team",
+   "label": "Team",
+   "read_only": 1
+  },
+  {
+   "fieldname": "site",
+   "fieldtype": "Link",
+   "options": "Site",
+   "label": "Site",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "cluster",
+   "fieldtype": "Link",
+   "options": "Cluster",
+   "label": "Cluster",
+   "read_only": 1
+  },
+  {
+   "fieldname": "release_group",
+   "fieldtype": "Link",
+   "options": "Release Group",
+   "label": "Release Group",
+   "read_only": 1
+  },
+  {
+   "fieldname": "plan",
+   "fieldtype": "Link",
+   "options": "Site Plan",
+   "label": "Plan",
+   "read_only": 1
+  },
+  {
+   "fieldname": "steps_section",
+   "fieldtype": "Section Break",
+   "label": "Steps"
+  },
+  {
+   "fieldname": "steps",
+   "fieldtype": "Table",
+   "options": "School Provisioning Step",
+   "label": "Steps",
+   "read_only": 1
+  },
+  {
+   "fieldname": "spec_section",
+   "fieldtype": "Section Break",
+   "label": "Spec",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "spec",
+   "fieldtype": "Code",
+   "options": "JSON",
+   "label": "Spec",
+   "read_only": 1
+  },
+  {
+   "fieldname": "provisioning_token",
+   "fieldtype": "Password",
+   "label": "Provisioning Token",
+   "read_only": 1,
+   "hidden": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-02 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Press",
+ "name": "School Provisioning",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "share": 1,
+   "print": 1,
+   "email": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "field:onboarding",
+ "naming_rule": "By fieldname",
+ "track_changes": 1
+}
