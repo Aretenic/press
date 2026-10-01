@@ -330,6 +330,7 @@ scheduler_events = {
 		"0 3 * * *": [
 			"press.r2.media_backup.copy_all_media",
 			"press.r2.control_plane.backup_control_plane",
+			"press.r2.verify.verify_buckets",
 			"press.press.doctype.drip_email.drip_email.send_drip_emails",
 			"press.press.doctype.virtual_disk_snapshot.virtual_disk_snapshot.sync_all_snapshots_from_aws",
 		],
