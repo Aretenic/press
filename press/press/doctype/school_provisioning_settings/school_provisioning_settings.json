@@ -11,7 +11,9 @@
   "teams_section",
   "team_user_domain",
   "groups_section",
-  "release_groups"
+  "release_groups",
+  "plans_section",
+  "plans"
  ],
  "fields": [
   {
@@ -57,11 +59,22 @@
    "fieldtype": "Table",
    "options": "School Provisioning Group",
    "label": "Release Groups"
+  },
+  {
+   "fieldname": "plans_section",
+   "fieldtype": "Section Break",
+   "label": "Plans Open to Schools"
+  },
+  {
+   "fieldname": "plans",
+   "fieldtype": "Table",
+   "options": "School Provisioning Plan",
+   "label": "Plans"
   }
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-10-02 12:00:00.000000",
+ "modified": "2026-10-03 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Press",
  "name": "School Provisioning Settings",

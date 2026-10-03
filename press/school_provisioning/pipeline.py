@@ -299,6 +299,7 @@ def post_status(doc, row, live: bool):
 				"state": row.status,
 				"message": row.error or "",
 				"site": doc.site or "",
+				"team": doc.team or "",
 				"live": int(live),
 			},
 			headers={"Authorization": f"token {settings.agora_api_key}:{secret}"},
