@@ -32,8 +32,9 @@ class FakeProvisioning(frappe._dict):
 
 
 def run(doc, start, poll=None):
-	posted = []
+	posted, users = [], []
 	with (
+		patch.object(P.frappe, "set_user", users.append),
 		patch.object(P.frappe, "get_doc", return_value=doc),
 		patch.dict(P.START, start),
 		patch.dict(P.POLL, poll or {}),
@@ -42,6 +43,7 @@ def run(doc, start, poll=None):
 		patch.object(P, "now_datetime", return_value="now"),
 	):
 		P.advance(doc.name)
+	assert users == ["Administrator"], users  # never as agora's provisioner user
 	return posted
 
 
