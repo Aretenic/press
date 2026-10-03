@@ -10,6 +10,7 @@ import json
 
 import frappe
 
+from press.school_provisioning import password_link
 from press.school_provisioning import spec as S
 from press.school_provisioning.install import PROVISIONER_ROLE
 
@@ -82,7 +83,9 @@ def open_groups():
 
 
 def open_plans():
-	return frappe.get_all("School Provisioning Plan", {"parent": "School Provisioning Settings"}, pluck="plan")
+	return frappe.get_all(
+		"School Provisioning Plan", {"parent": "School Provisioning Settings"}, pluck="plan"
+	)
 
 
 @frappe.whitelist(methods=["GET"])
@@ -91,9 +94,7 @@ def catalog():
 	frappe.only_for(PROVISIONER_ROLE)
 	return {
 		"release_groups": release_groups(),
-		"clusters": frappe.get_all(
-			"Cluster", {"public": 1}, ["name", "title"], order_by="name"
-		),
+		"clusters": frappe.get_all("Cluster", {"public": 1}, ["name", "title"], order_by="name"),
 		"plans": [
 			{"name": plan, "title": frappe.db.get_value("Site Plan", plan, "plan_title")}
 			for plan in open_plans()
@@ -113,3 +114,10 @@ def release_groups():
 		}
 		for group in open_groups()
 	]
+
+
+@frappe.whitelist(methods=["POST"])
+def administrator_password_link(onboarding, provisioning_token):
+	"""A fresh one-time link for the school's administrator to set a password (Aretenic ADR 044c)."""
+	frappe.only_for(PROVISIONER_ROLE)
+	return password_link.make(onboarding, provisioning_token)
