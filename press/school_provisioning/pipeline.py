@@ -58,6 +58,9 @@ def advance_running():
 
 
 def advance(name: str):  # noqa: C901
+	# Enqueued by agora's School Provisioner user, whose one role cannot read what Press's own
+	# Team, Site and Agent Job hooks query; the pipeline acts as Press, not as agora.
+	frappe.set_user("Administrator")
 	doc: SchoolProvisioning = frappe.get_doc("School Provisioning", name, for_update=True)
 	if doc.status != "Running":
 		return
@@ -299,6 +302,7 @@ def post_status(doc, row, live: bool):
 				"state": row.status,
 				"message": row.error or "",
 				"site": doc.site or "",
+				"team": doc.team or "",
 				"live": int(live),
 			},
 			headers={"Authorization": f"token {settings.agora_api_key}:{secret}"},

@@ -10,6 +10,7 @@ import json
 
 import frappe
 
+from press.school_provisioning import password_link
 from press.school_provisioning import spec as S
 from press.school_provisioning.install import PROVISIONER_ROLE
 
@@ -65,8 +66,8 @@ def record_errors(spec):
 		errors += [
 			f"{app} is not in {infra['release_group']}." for app in infra["apps"] if app not in offered
 		]
-	if not frappe.db.exists("Site Plan", infra["plan"]):
-		errors.append(f"Plan {infra['plan']} does not exist.")
+	if infra["plan"] not in open_plans():
+		errors.append(f"Plan {infra['plan']} is not open to schools.")
 	domain = frappe.db.get_single_value("Press Settings", "domain")
 	if frappe.db.exists("Site", {"name": f"{infra['subdomain']}.{domain}", "status": ("!=", "Archived")}):
 		errors.append(f"{infra['subdomain']}.{domain} already exists.")
@@ -81,6 +82,26 @@ def open_groups():
 	)
 
 
+def open_plans():
+	return frappe.get_all(
+		"School Provisioning Plan", {"parent": "School Provisioning Settings"}, pluck="plan"
+	)
+
+
+@frappe.whitelist(methods=["GET"])
+def catalog():
+	"""Every name agora's onboarding form may choose, so it picks rather than types (Aretenic ADR 044a)."""
+	frappe.only_for(PROVISIONER_ROLE)
+	return {
+		"release_groups": release_groups(),
+		"clusters": frappe.get_all("Cluster", {"public": 1}, ["name", "title"], order_by="name"),
+		"plans": [
+			{"name": plan, "title": frappe.db.get_value("Site Plan", plan, "plan_title")}
+			for plan in open_plans()
+		],
+	}
+
+
 @frappe.whitelist(methods=["GET"])
 def release_groups():
 	"""The groups agora may choose from, with their apps, so it can mirror them."""
@@ -93,3 +114,10 @@ def release_groups():
 		}
 		for group in open_groups()
 	]
+
+
+@frappe.whitelist(methods=["POST"])
+def administrator_password_link(onboarding, provisioning_token):
+	"""A fresh one-time link for the school's administrator to set a password (Aretenic ADR 044c)."""
+	frappe.only_for(PROVISIONER_ROLE)
+	return password_link.make(onboarding, provisioning_token)
