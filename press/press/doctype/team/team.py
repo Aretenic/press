@@ -16,6 +16,7 @@ from frappe.query_builder.functions import Count
 from frappe.rate_limiter import rate_limit
 from frappe.utils import add_to_date, get_fullname, get_last_day, get_url_to_form, getdate, random_string
 
+from press.access.utils import is_outside_employee
 from press.api.client import dashboard_whitelist
 from press.exceptions import FrappeioServerNotSet
 from press.guards.team_guard import only_admin
@@ -747,6 +748,7 @@ class Team(Document):
 
 	@frappe.whitelist()
 	def enable_erpnext_partner_privileges(self):
+		frappe.only_for(["Partner Manager", "System Manager"], message=True)
 		self.erpnext_partner = 1
 		if not self.partner_email:
 			self.partner_email = self.user
@@ -755,7 +757,9 @@ class Team(Document):
 		self.partner_status = "Active"
 		self.save(ignore_permissions=True)
 		self.create_partner_referral_code()
-		frappe.get_doc("User", self.user).add_roles("Partner")
+		user = frappe.get_doc("User", self.user)
+		user.append_roles("Partner")
+		user.save(ignore_permissions=True)
 
 	@frappe.whitelist()
 	def disable_erpnext_partner_privileges(self):
@@ -1228,6 +1232,11 @@ class Team(Document):
 		if not is_system_user() and frappe.session.user != self.user and not has_admin_access.run():
 			frappe.throw(_("Only team owner or admins can invite team members"))
 
+		if is_outside_employee(self.name):
+			frappe.throw(
+				_("Employees cannot invite members to a team they do not belong to"), frappe.PermissionError
+			)
+
 		frappe.utils.validate_email_address(email, True)
 
 		if frappe.db.exists("Team Member", {"user": email, "parent": self.name, "parenttype": "Team"}):
@@ -1400,9 +1409,28 @@ class Team(Document):
 		if self.free_account or self.billing_team or self.payment_mode:
 			return True
 
+		return self.has_paid_invoice()
+
+	def can_skip_ssh_wait(self):
+		return self.has_paid_invoice() or (self.is_payment_mode_set() and self.has_paid_subscription())
+
+	def has_paid_invoice(self):
 		return bool(
 			frappe.db.exists("Invoice", {"team": self.name, "amount_paid": (">", 0), "status": "Paid"})
 		)
+
+	def has_paid_subscription(self):
+		paid_plan_filters = {
+			"Site Plan": {"price_usd": (">", 0), "is_trial_plan": 0},
+			"Server Plan": {"price_usd": (">", 0)},
+		}
+		for plan_type, filters in paid_plan_filters.items():
+			plans = frappe.get_all(
+				"Subscription", {"team": self.name, "enabled": 1, "plan_type": plan_type}, pluck="plan"
+			)
+			if plans and frappe.db.exists(plan_type, {"name": ("in", plans), **filters}):
+				return True
+		return False
 
 	def billing_info(self):
 		micro_debit_charge_field = (

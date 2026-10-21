@@ -1,13 +1,11 @@
 # Copyright (c) 2022, Frappe and contributors
 # For license information, please see license.txt
 
-from typing import List
-
 import frappe
 from frappe.model.document import Document
 
 from press.api.site import _new
-from press.press.doctype.site.site import prepare_site
+from press.press.doctype.site.site import Site, prepare_site
 
 
 class SiteReplication(Document):
@@ -36,14 +34,14 @@ class SiteReplication(Document):
 		# always finds the replica just created
 		if self.is_new():
 			self.validate_site_name()
+			# `after_insert` only logs a failed copy, so refuse here, where the operator sees it.
+			Site("Site", self.site).validate_backup_access()
 
 	def validate_duplicate(self):
 		# check for already running site replication
 		site_reps = frappe.get_all(
 			"Site Replication",
-			dict(
-				site=self.site, subdomain=self.subdomain, status="Running", name=("!=", self.name)
-			),
+			dict(site=self.site, subdomain=self.subdomain, status="Running", name=("!=", self.name)),
 			pluck="name",
 		)
 		if site_reps:
@@ -53,14 +51,10 @@ class SiteReplication(Document):
 		# check if there is an non-archived site with same name
 		domain = frappe.get_doc("Site", self.site).domain
 		new_sitename = self.subdomain + "." + domain
-		sites = frappe.get_all(
-			"Site", dict(status=["!=", "Archived"], name=new_sitename), pluck="name"
-		)
+		sites = frappe.get_all("Site", dict(status=["!=", "Archived"], name=new_sitename), pluck="name")
 
 		if sites:
-			frappe.throw(
-				f"Site {self.new_site} already exists. Please choose another subdomain."
-			)
+			frappe.throw(f"Site {self.new_site} already exists. Please choose another subdomain.")
 
 	def after_insert(self):
 		self.status = "Running"
@@ -73,12 +67,12 @@ class SiteReplication(Document):
 			frappe.log_error("Site Replication Error")
 
 	@classmethod
-	def get_all_running_site_replications(cls) -> List[Document]:
+	def get_all_running_site_replications(cls) -> list[Document]:
 		replications = frappe.get_all(cls.doctype, dict(status="Running"), pluck="name")
 		return cls.get_docs(replications)
 
 	@classmethod
-	def get_docs(cls, names: List[str]) -> List[Document]:
+	def get_docs(cls, names: list[str]) -> list[Document]:
 		return [frappe.get_doc(cls.doctype, name) for name in names]
 
 
