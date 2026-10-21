@@ -116,10 +116,13 @@ runcmd:
 {% endif %}
 
 write_files:
+{#- Aretenic: only app servers install the statsd_exporter binary; elsewhere this unit restart-loops #}
+{%- if server.doctype == "Server" %}
 - path: /etc/systemd/system/statsd_exporter.service
   permissions: "0644"
   content: |
     {{ statsd_exporter_service | indent(4) }}
+{%- endif %}
 
 - path: /etc/filebeat/filebeat.yml
   content: |
