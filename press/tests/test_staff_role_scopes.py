@@ -36,6 +36,8 @@ HYBRID_ROLE = "Press Hybrid Server Manager"
 SYSTEM_MANAGER_ONLY = {
 	"Build Cache Shell",
 	"Certificate Authority",
+	# Aretenic: holds the per-site geocoding tokens (ADR 053)
+	"Geocoding Token",
 	"Mail Setup",
 	"Mpesa Setup",
 	"Payment Gateway",
