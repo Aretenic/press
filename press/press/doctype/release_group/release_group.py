@@ -16,17 +16,18 @@ from frappe.core.utils import find, find_all
 from frappe.model.document import Document
 from frappe.model.naming import append_number_if_name_exists
 from frappe.query_builder.functions import Count
-from frappe.utils import cstr, flt, get_url, sbool
+from frappe.utils import cstr, flt, sbool
 from frappe.utils.caching import redis_cache
 from frappe.utils.data import add_to_date
 
 from press.access.actions import ReleaseGroupActions
 from press.access.decorators import action_guard
+from press.access.staff_roles import safe_for_readers
 from press.agent import Agent
 from press.api.client import dashboard_whitelist
 from press.api.github import get_frappe_branch_major_version
 from press.exceptions import ImageNotFoundInRegistry, InsufficientSpaceOnServer, VolumeResizeLimitError
-from press.guards import role_guard
+from press.guards import role_guard, team_guard
 from press.overrides import get_permission_query_conditions_for_doctype
 from press.press.doctype.app.app import new_app
 from press.press.doctype.app_source.app_source import AppSource, create_app_source
@@ -41,6 +42,7 @@ from press.press.doctype.site_config.site_config import (
 	decode_json_config_value,
 	parse_json_config_value,
 )
+from press.press.doctype.team_change.team_change import request_transfer
 from press.utils import (
 	fmt_timedelta,
 	get_app_tag,
@@ -55,6 +57,7 @@ if TYPE_CHECKING:
 	from datetime import datetime
 	from typing import Any
 
+	from press.press.doctype.bench.bench import Bench
 	from press.press.doctype.team.team import Team
 	from press.press.doctype.user_ssh_key.user_ssh_key import UserSSHKey
 
@@ -1089,6 +1092,7 @@ class ReleaseGroup(Document, TagHelpers):
 		)
 
 	@frappe.whitelist()
+	@safe_for_readers
 	def deploy_information(self):
 		out = frappe._dict(update_available=False)
 		last_deployed_bench = get_last_doc(
@@ -1131,6 +1135,7 @@ class ReleaseGroup(Document, TagHelpers):
 		return out
 
 	@dashboard_whitelist()
+	@safe_for_readers
 	def deployed_versions(self):
 		Bench = frappe.qb.DocType("Bench")
 		Server = frappe.qb.DocType("Server")
@@ -1214,6 +1219,7 @@ class ReleaseGroup(Document, TagHelpers):
 		return deployed_versions
 
 	@dashboard_whitelist()
+	@safe_for_readers
 	def get_app_versions(self, bench):
 		apps = frappe.db.get_all(
 			"Bench App",
@@ -1235,54 +1241,17 @@ class ReleaseGroup(Document, TagHelpers):
 		return apps
 
 	@dashboard_whitelist()
+	@team_guard.only_admin()
 	def send_change_team_request(self, team_mail_id: str, reason: str):
 		"""Send email to team to accept bench transfer request"""
+		request_transfer(self, team_mail_id, reason, title=self.title or self.name)
 
-		if self.team != get_current_team():
-			frappe.throw(
-				"Only a member of the team that owns this bench group can transfer it. Please switch to the owning team and try again."
-			)
-
-		if not frappe.db.exists("Team", {"user": team_mail_id, "enabled": 1}):
-			frappe.throw(
-				"We couldn't find an active team with that email. Please check the address and make sure the recipient has an active Frappe Cloud account."
-			)
-
-		old_team = frappe.db.get_value("Team", self.team, "user")
-
-		if old_team == team_mail_id:
-			frappe.throw(f"Bench is already owned by the team {team_mail_id}")
-
-		key = frappe.generate_hash("Release Group Transfer Link", 20)
-		frappe.get_doc(
-			{
-				"doctype": "Team Change",
-				"document_type": "Release Group",
-				"document_name": self.name,
-				"to_team": frappe.db.get_value("Team", {"user": team_mail_id, "enabled": 1}),
-				"from_team": self.team,
-				"reason": reason or "",
-				"key": key,
-			}
-		).insert()
-
-		link = get_url(f"/api/method/press.api.bench.confirm_bench_transfer?key={key}")
-
-		if frappe.conf.developer_mode:
-			print(f"Bench transfer link for {team_mail_id}\n{link}\n")
-
-		frappe.sendmail(
-			recipients=team_mail_id,
-			subject="Transfer Bench Ownership Confirmation",
-			template="transfer_team_confirmation",
-			args={
-				"name": self.title or self.name,
-				"type": "bench",
-				"old_team": old_team,
-				"new_team": team_mail_id,
-				"transfer_url": link,
-			},
-		)
+	@dashboard_whitelist()
+	@safe_for_readers
+	def get_private_apps(self) -> list[str]:
+		"""Apps from private repositories, which the new owner must connect to their own GitHub"""
+		sources = [app.source for app in self.apps]
+		return frappe.get_all("App Source", {"name": ("in", sources), "public": 0}, pluck="app_title")
 
 	@dashboard_whitelist()
 	@action_guard(ReleaseGroupActions.SSHAccess)
@@ -1842,6 +1811,58 @@ class ReleaseGroup(Document, TagHelpers):
 			frappe.throw(f"No suitable server for new bench in {cluster}")
 
 		self.add_server(server, deploy=True)
+
+	@dashboard_whitelist()
+	def remove_region(self, region: str):
+		"""
+		Remove a region from release group. Archives its benches and unlinks its servers.
+		"""
+		servers = self.get_servers_in_cluster(region)
+		self.validate_region_removal(region, servers)
+		benches = self.get_benches_to_archive(servers)
+		for bench in benches:
+			bench.ready_to_archive()
+
+		self.servers = [row for row in self.servers if row.server not in servers]
+		self.save()
+		for bench in benches:
+			bench.archive()
+
+	def get_servers_in_cluster(self, cluster: str) -> list[str]:
+		servers = [row.server for row in self.servers]
+		return frappe.get_all("Server", {"name": ("in", servers), "cluster": cluster}, pluck="name")
+
+	def validate_region_removal(self, region: str, servers: list[str]):
+		clusters = self.get_clusters()
+		if region not in clusters:
+			frappe.throw(_("Region {0} is not part of this bench group").format(region))
+		if len(clusters) == 1:
+			frappe.throw(_("You cannot remove the only region of a bench group"))
+		if frappe.db.exists(
+			"Site", {"group": self.name, "server": ("in", servers), "status": ("!=", "Archived")}
+		):
+			frappe.throw(_("Move or archive the sites in region {0} before you remove it").format(region))
+		if frappe.db.exists(
+			"Bench",
+			{
+				"group": self.name,
+				"server": ("in", servers),
+				"status": ("in", ("Pending", "Installing", "Updating")),
+			},
+		):
+			frappe.throw(
+				_("A deploy is in progress in region {0}. Try again after it finishes").format(region)
+			)
+
+	def get_benches_to_archive(self, servers: list[str]) -> list[Bench]:
+		from press.press.doctype.bench.bench import Bench
+
+		benches = frappe.get_all(
+			"Bench",
+			{"group": self.name, "server": ("in", servers), "status": ("in", ("Active", "Broken"))},
+			pluck="name",
+		)
+		return [Bench("Bench", bench) for bench in benches]
 
 	def get_last_successful_candidate_build(self, platform: str | None = None) -> DeployCandidateBuild | None:
 		try:

@@ -7,6 +7,7 @@ import json
 import frappe
 from frappe.utils import unique
 
+from press.access.staff_roles import safe_for_readers
 from press.press.doctype.server.server import BaseServer
 from press.runner import Ansible
 from press.security import fail2ban
@@ -66,7 +67,15 @@ class ProxyServer(BaseServer):
 		private_mac_address: DF.Data | None
 		private_vlan_id: DF.Data | None
 		provider: DF.Literal[
-			"Generic", "Scaleway", "AWS EC2", "OCI", "Hetzner", "Vodacom", "DigitalOcean", "Frappe Compute", "Vultr"
+			"Generic",
+			"Scaleway",
+			"AWS EC2",
+			"OCI",
+			"Hetzner",
+			"Vodacom",
+			"DigitalOcean",
+			"Frappe Compute",
+			"Vultr",
 		]
 		proxysql_admin_password: DF.Password | None
 		proxysql_monitor_password: DF.Password | None
@@ -142,6 +151,7 @@ class ProxyServer(BaseServer):
 				user=self.ssh_user or "root",
 				port=self.ssh_port or 22,
 				variables={
+					"fail2ban_ignore_ips": fail2ban.ignore_ips(),
 					"server": self.name,
 					"workers": 1,
 					"domain": self.domain,
@@ -222,71 +232,6 @@ class ProxyServer(BaseServer):
 				self.save()
 		except Exception:
 			log_error("SSH Proxy Setup Exception", server=self.as_dict())
-
-	@frappe.whitelist()
-	def setup_fail2ban(self):
-		frappe.enqueue_doc(
-			self.doctype,
-			self.name,
-			"_setup_fail2ban",
-			queue="long",
-			timeout=1200,
-		)
-		self.status = "Installing"
-		self.save()
-
-	def _setup_fail2ban(self):
-		try:
-			ansible = Ansible(
-				playbook="fail2ban.yml",
-				server=self,
-				user=self._ssh_user(),
-				port=self._ssh_port(),
-				variables={
-					"ignore_ips": fail2ban.ignore_ips(),
-				},
-			)
-			play = ansible.run()
-			self.reload()
-			if play.status == "Success":
-				self.status = "Active"
-			else:
-				self.status = "Broken"
-		except Exception:
-			self.status = "Broken"
-			log_error("Fail2ban Setup Exception", server=self.as_dict())
-		self.save()
-
-	@frappe.whitelist()
-	def remove_fail2ban(self):
-		frappe.enqueue_doc(
-			self.doctype,
-			self.name,
-			"_remove_fail2ban",
-			queue="long",
-			timeout=1200,
-		)
-		self.status = "Installing"
-		self.save()
-
-	def _remove_fail2ban(self):
-		try:
-			ansible = Ansible(
-				playbook="fail2ban_remove.yml",
-				server=self,
-				user=self._ssh_user(),
-				port=self._ssh_port(),
-			)
-			play = ansible.run()
-			self.reload()
-			if play.status == "Success":
-				self.status = "Active"
-			else:
-				self.status = "Broken"
-		except Exception:
-			self.status = "Broken"
-			log_error("Fail2ban Setup Exception", server=self.as_dict())
-		self.save()
 
 	@frappe.whitelist()
 	def setup_proxysql(self):
@@ -569,6 +514,7 @@ class ProxyServer(BaseServer):
 		return "Added a dashboard banner and queued reduction of dns record ttl on sites"
 
 	@frappe.whitelist()
+	@safe_for_readers
 	def get_memory_limits(self):
 		if self.mem_limits:
 			return json.loads(self.mem_limits)

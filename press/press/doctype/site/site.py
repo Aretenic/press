@@ -29,7 +29,7 @@ from frappe.utils import (
 	cstr,
 	flt,
 	get_datetime,
-	get_url,
+	get_system_timezone,
 	now_datetime,
 	sbool,
 	time_diff_in_hours,
@@ -38,6 +38,7 @@ from frappe.utils.caching import redis_cache
 
 from press.access.actions import SiteActions
 from press.access.decorators import action_guard
+from press.access.staff_roles import safe_for_readers
 from press.access.support_access import has_support_access
 from press.access.utils import is_outside_employee
 from press.exceptions import (
@@ -47,7 +48,7 @@ from press.exceptions import (
 	SiteUnderMaintenance,
 	VolumeResizeLimitError,
 )
-from press.guards import role_guard
+from press.guards import role_guard, team_guard
 from press.marketplace.doctype.marketplace_app_plan.marketplace_app_plan import (
 	MarketplaceAppPlan,
 )
@@ -63,6 +64,7 @@ from press.press.doctype.site.site_plan_utils import (
 	get_available_warranty_quota_for_server,
 	get_next_allowed_dedicated_product_warranty_change_date,
 )
+from press.press.doctype.team_change.team_change import request_transfer
 from press.saas.doctype.product_trial.product_trial import create_free_app_subscription
 from press.utils.jobs import has_job_timeout_exceeded
 from press.utils.telemetry import capture
@@ -383,6 +385,7 @@ class Site(Document, TagHelpers):
 		return Agent(self.database_server_name, server_type="Database Server")
 
 	@dashboard_whitelist()
+	@safe_for_readers
 	def is_replica_server_available(self) -> bool:
 		return bool(
 			frappe.db.exists(
@@ -798,6 +801,7 @@ class Site(Document, TagHelpers):
 				)
 
 	@dashboard_whitelist()
+	@safe_for_readers
 	def get_backup_schedule(self) -> dict:
 		"""Times are on the server's clock, same as the scheduler reads them."""
 		return {
@@ -1356,6 +1360,7 @@ class Site(Document, TagHelpers):
 		return job.name
 
 	@frappe.whitelist()
+	@safe_for_readers
 	def last_migrate_failed(self):
 		"""Returns `True` if the last site update's(`Migrate` deploy type) migrate site job step failed, `False` otherwise"""
 
@@ -1522,7 +1527,7 @@ class Site(Document, TagHelpers):
 
 	@frappe.whitelist()
 	def rotate_database_password(self):
-		frappe.only_for("System Manager", message=True)
+		frappe.only_for(["System Manager", "Press Support L1", "Press Support Engineer"], message=True)
 		self.validate_no_password_rotation_in_progress()
 		frappe.enqueue_doc(
 			self.doctype,
@@ -1573,16 +1578,57 @@ class Site(Document, TagHelpers):
 		if play.status != "Success":
 			frappe.throw(f"Couldn't change the database password. See Ansible Play {play.name}")
 
-		# Not deduplicated: reusing a pending config job would drop the new password
-		job = Agent(self.server).create_agent_job(
+		job = self.update_site_config_without_deduplication({"db_password": password})
+		log_site_activity(self.name, "Update Configuration", reason="Rotate database password", job=job.name)
+
+	def update_site_config_without_deduplication(self, config: dict) -> AgentJob:
+		# Reusing a pending config job would drop a rotated secret
+		return Agent(self.server).create_agent_job(
 			"Update Site Configuration",
 			f"benches/{self.bench}/sites/{self.name}/config",
-			{"config": {"db_password": password}, "remove": []},
+			{"config": config, "remove": []},
 			bench=self.bench,
 			site=self.name,
 			deduplicate=False,
 		)
-		log_site_activity(self.name, "Update Configuration", reason="Rotate database password", job=job.name)
+
+	@frappe.whitelist()
+	def rotate_saas_communication_secret(self):
+		frappe.only_for(["System Manager", "Press Support L1", "Press Support Engineer"], message=True)
+		self.validate_communication_secret_can_rotate()
+		self.saas_communication_secret = frappe.generate_hash(length=32)
+		config = {"fc_communication_secret": self.saas_communication_secret}
+		self._update_configuration(config)
+		job = self.update_site_config_without_deduplication(config)
+		# Tokens made with the old secret would keep working until they expire
+		frappe.db.delete("Site Access Token", {"site": self.name})
+		log_site_activity(
+			self.name, "Update Configuration", reason="Rotate communication secret", job=job.name
+		)
+		if frappe.db.exists("Product Trial Request", {"site": self.name, "status": "Site Created"}):
+			# After commit, so that a failed call to the site can't undo the rotation
+			frappe.enqueue_doc(
+				"Site", self.name, "create_sync_user_webhook", queue="short", enqueue_after_commit=True
+			)
+
+	def validate_communication_secret_can_rotate(self):
+		if self.status not in ("Active", "Inactive", "Broken", "Suspended"):
+			frappe.throw(
+				f"This site is {self.status.lower()}. Rotate the communication secret after the site is active."
+			)
+		# Every full config update carries the secret, so a pending one would put the old secret back
+		if frappe.db.exists(
+			"Agent Job",
+			{
+				"job_type": "Update Site Configuration",
+				"site": self.name,
+				"status": ("not in", ("Success", "Failure", "Delivery Failure")),
+				"request_data": ("like", '%"fc_communication_secret"%'),
+			},
+		):
+			frappe.throw(
+				"A site configuration update is still running for this site. Please try again after it finishes."
+			)
 
 	@dashboard_whitelist()
 	@site_action(["Active", "Broken", "Inactive"])
@@ -1947,7 +1993,7 @@ class Site(Document, TagHelpers):
 
 	@frappe.whitelist()
 	def move_to_bench(self, bench, deactivate=True, skip_failing_patches=False):
-		frappe.only_for("System Manager")
+		frappe.only_for(["System Manager", "Press Support Engineer"])
 		self.ready_for_move()
 
 		if bench == self.bench:
@@ -2004,6 +2050,11 @@ class Site(Document, TagHelpers):
 			site_migration.start()
 
 		return site_migration
+
+	@property
+	def serves_requests_before_update(self) -> bool:
+		"""A broken site still serves requests, so an update must not leave it in maintenance mode."""
+		return self.status_before_update in ("Active", "Broken")
 
 	def reset_previous_status(self, fix_broken=False):
 		if self.status == "Archived":
@@ -2096,10 +2147,13 @@ class Site(Document, TagHelpers):
 
 		:returns: None if key not in config.
 		"""
-		key_obj = find(self.configuration, lambda x: x.key == key)
-		if key_obj:
-			return json.loads(key_obj.get("value"))
-		return None
+		row = find(self.configuration, lambda x: x.key == key)
+		if not row:
+			return None
+		# Only the structured types are JSON-encoded; a String or Password row holds its value raw
+		if isinstance(row.value, str) and (row.type or row.get_type()) in ("Number", "Boolean", "JSON"):
+			return json.loads(row.value)
+		return row.value
 
 	def add_domain_to_config(self, domain: str):
 		domains = set(self.get_config_value_for_key("domains") or [])
@@ -2338,52 +2392,10 @@ class Site(Document, TagHelpers):
 		return delete_remote_backup_objects(sites_remote_files)
 
 	@dashboard_whitelist()
+	@team_guard.only_admin()
 	def send_change_team_request(self, team_mail_id: str, reason: str):
 		"""Send email to team to accept site transfer request"""
-
-		if self.team != get_current_team():
-			frappe.throw(
-				"You don't seem to be a member of {self.team}. You should be a member of the team owning the site to initiate a site ownership transfer. Please verify with your team admin and retry."
-			)
-
-		if not frappe.db.exists("Team", {"user": team_mail_id, "enabled": 1}):
-			frappe.throw("No Active Team record found.")  # nosemgrep
-
-		old_team = frappe.db.get_value("Team", self.team, "user")
-
-		if old_team == team_mail_id:
-			frappe.throw(f"Site is already owned by the team {team_mail_id}")  # nosemgrep
-
-		key = frappe.generate_hash("Site Transfer Link", 20)
-		frappe.get_doc(
-			{
-				"doctype": "Team Change",
-				"document_type": "Site",
-				"document_name": self.name,
-				"to_team": frappe.db.get_value("Team", {"user": team_mail_id, "enabled": 1}),
-				"from_team": self.team,
-				"reason": reason,
-				"key": key,
-			}
-		).insert()
-
-		link = get_url(f"/api/method/press.api.site.confirm_site_transfer?key={key}")
-
-		if frappe.conf.developer_mode:
-			print(f"\nSite transfer link for {team_mail_id}\n{link}\n")
-
-		frappe.sendmail(
-			recipients=team_mail_id,
-			subject="Transfer Site Ownership Confirmation",
-			template="transfer_team_confirmation",
-			args={
-				"name": self.host_name or self.name,
-				"type": "site",
-				"old_team": old_team,
-				"new_team": team_mail_id,
-				"transfer_url": link,
-			},
-		)
+		request_transfer(self, team_mail_id, reason, title=self.host_name or self.name)
 
 	@dashboard_whitelist()
 	@site_action(["Active", "Broken"])
@@ -2450,6 +2462,7 @@ class Site(Document, TagHelpers):
 
 	@frappe.whitelist()
 	def show_admin_password(self):
+		frappe.only_for("System Manager")
 		frappe.msgprint(self.get_password("admin_password"), title="Password", indicator="green")
 
 	def get_connection_as_admin(self):
@@ -2683,7 +2696,7 @@ class Site(Document, TagHelpers):
 
 	def create_sync_user_webhook(self):
 		"""
-		Create 3 webhook records in the site to sync the user with press
+		Create or update 3 webhook records in the site to sync the user with press
 		- One for user record creation
 		- One for user record update
 		- One for user record deletion
@@ -2726,6 +2739,8 @@ class Site(Document, TagHelpers):
 			except FrappeException as ex:
 				if "frappe.exceptions.DuplicateEntryError" not in str(ex):
 					raise ex
+				# Puts the current communication secret in the existing webhook
+				conn.update({**doctype_data, **webhook})
 
 	def sync_users_to_product_site(self, analytics=None):
 		from press.press.doctype.site_user.site_user import create_user_for_product_site
@@ -2810,6 +2825,11 @@ class Site(Document, TagHelpers):
 					now_datetime(), seconds=exponential_backoff_duration
 				)
 				self.save()
+
+	@frappe.whitelist()
+	def empty_creation_failed(self):
+		"""Unblock site actions on a working site that a failed restore marked as failed"""
+		self.db_set("creation_failed", None)
 
 	@frappe.whitelist()
 	def set_status_based_on_ping(self):
@@ -3212,6 +3232,7 @@ class Site(Document, TagHelpers):
 		self.change_plan(plan)
 
 	@dashboard_whitelist()
+	@safe_for_readers
 	def last_plan_change(self):
 		"""Most recent plan change for this site, for showing 'last changed on' in the dashboard."""
 		return frappe.db.get_value(
@@ -3292,8 +3313,8 @@ class Site(Document, TagHelpers):
 		if self.plan and plan.is_trial_plan:
 			frappe.throw(
 				_(
-					"The site {self.name} is currently on a trial plan. Cannot <b>deactivate site on a trial plan</b>"
-				)
+					"The site {0} is currently on a trial plan. Cannot <b>deactivate site on a trial plan</b>"
+				).format(self.name)
 			)
 
 		if self.plan and plan.is_frappe_plan:
@@ -3618,6 +3639,35 @@ class Site(Document, TagHelpers):
 		):
 			frappe.throw("Database Access is already being enabled on this site. Please check after a while.")
 
+	@dashboard_whitelist()
+	def get_auto_update_window(self):
+		"""Tell when an automatic update of this site can start.
+
+		The dashboard shows this, because the user cannot see the update window
+		anywhere else.
+		"""
+		from press.press.doctype.site_update.site_update import (
+			DEFAULT_SITE_TIMEZONE,
+			get_deploy_hour_windows,
+		)
+
+		if self.only_update_at_specified_time:
+			# This schedule runs on the clock of the platform, not of the site.
+			return {
+				"timezone": get_system_timezone(),
+				"windows": None,
+				"frequency": self.update_trigger_frequency,
+				"time": self.update_trigger_time,
+				"weekday": self.update_on_weekday,
+				"day_of_month": self.update_on_day_of_month,
+				"end_of_month": self.update_end_of_month,
+			}
+
+		return {
+			"timezone": self.timezone or DEFAULT_SITE_TIMEZONE,
+			"windows": get_deploy_hour_windows(),
+		}
+
 	def get_auto_update_info(self):
 		fields = [
 			"auto_updates_scheduled",
@@ -3693,6 +3743,7 @@ class Site(Document, TagHelpers):
 		}
 
 	@dashboard_whitelist()
+	@safe_for_readers
 	def get_database_performance_report(self):
 		from press.press.report.mariadb_slow_queries.mariadb_slow_queries import get_data as get_slow_queries
 
@@ -4038,10 +4089,12 @@ class Site(Document, TagHelpers):
 
 	@dashboard_whitelist()
 	@redis_cache(ttl=60)
+	@safe_for_readers
 	def get_current_usage(self):
 		return self.current_usage
 
 	@frappe.whitelist()
+	@safe_for_readers
 	def get_actions(self):
 		actions = [
 			{
@@ -4220,15 +4273,15 @@ class Site(Document, TagHelpers):
 					"data": json.loads(frappe.cache().get_value(key_for_schema)),
 				}
 
-		# Check if any agent job is created within 5 minutes and in pending/running condition
-		# Checks to prevent duplicate agent job creation due to race condition
+		# An unfinished job from the last 30 minutes blocks a new one, so repeated calls
+		# cannot pile up jobs while the server is slow to answer
 		if not frappe.db.exists(
 			"Agent Job",
 			{
 				"job_type": "Fetch Database Table Schema",
 				"site": self.name,
 				"status": ["in", ["Undelivered", "Pending", "Running"]],
-				"creation": (">", frappe.utils.add_to_date(None, minutes=-5)),
+				"creation": (">", frappe.utils.add_to_date(None, minutes=-30)),
 			},
 		):
 			# create the agent job and put it in loading state
@@ -4242,6 +4295,7 @@ class Site(Document, TagHelpers):
 		}
 
 	@dashboard_whitelist()
+	@safe_for_readers
 	def fetch_database_processes(self):
 		agent = Agent(self.server)
 		if agent.should_skip_requests():
@@ -4476,6 +4530,7 @@ class Site(Document, TagHelpers):
 		)
 
 	@dashboard_whitelist()
+	@safe_for_readers
 	def binlog_indexing_service_status(self):
 		hosted_on_shared_server = bool(
 			frappe.db.get_value("Database Server", self.database_server_name, "public", cache=True)
@@ -4630,6 +4685,7 @@ class Site(Document, TagHelpers):
 		)
 
 	@dashboard_whitelist()
+	@safe_for_readers
 	def get_communication_infos(self):
 		return (
 			[{"channel": c.channel, "type": c.type, "value": c.value} for c in self.communication_infos]
@@ -4646,6 +4702,7 @@ class Site(Document, TagHelpers):
 		update_infos("Site", self.name, values)
 
 	@dashboard_whitelist()
+	@safe_for_readers
 	def get_migration_options(self):  # noqa
 		release_group: ReleaseGroup = frappe.get_doc("Release Group", self.group)
 		version = frappe.db.get_value("Release Group", self.group, "version")

@@ -17,6 +17,7 @@ from frappe.utils import convert_utc_to_system_timezone
 from frappe.utils.caching import site_cache
 from frappe.utils.data import cint
 
+from press.access.staff_roles import safe_for_readers
 from press.agent import Agent
 from press.api.client import dashboard_whitelist
 from press.exceptions import SiteAlreadyArchived, SiteUnderMaintenance
@@ -48,6 +49,9 @@ STATEMENT_TIME_BUMP_SIZE_MB = 2 * 1024
 # and the migration runs there. Everything before it, the backup included, leaves the site
 # untouched — if the backup fails, the job stops and never gets here.
 POINT_OF_NO_RETURN_STEP = "Move Site"
+
+# The scheduler falls back to this when the agent did not report a timezone yet.
+DEFAULT_SITE_TIMEZONE = "Asia/Kolkata"
 
 
 class SiteUpdate(Document):
@@ -697,20 +701,17 @@ class SiteUpdate(Document):
 
 			self.bump_max_statement_time_before_recovery(site)
 
-			# Disable maintenance mode for active sites
-			activate = site.status_before_update == "Active"
 			job = agent.update_site_recover_move(
 				site,
 				self.source_bench,
 				self.deploy_type,
-				activate,
+				site.serves_requests_before_update,
 				rollback_scripts=self.get_before_migrate_scripts(rollback=True),
 				restore_touched_tables=(not self.skipped_backups and self.backup_type == "Logical"),
 			)
 		else:
 			# Site is already on the source bench
-			if site.status_before_update == "Active":
-				# Disable maintenance mode for active sites
+			if site.serves_requests_before_update:
 				job = agent.update_site_recover(site)
 			else:
 				# Site is already on source bench and maintenance mode is on
@@ -727,6 +728,7 @@ class SiteUpdate(Document):
 				frappe.get_doc("Virtual Disk Snapshot", snapshot).delete_snapshot()
 
 	@dashboard_whitelist()
+	@safe_for_readers
 	def get_steps(self):  # noqa: C901
 		"""
 		{
@@ -910,22 +912,25 @@ def update_status(name: str, status: str):
 @site_cache(ttl=60)
 def benches_with_available_update(site=None, server=None):
 	site_bench = frappe.db.get_value("Site", site, "bench") if site else None
-	values = {}
-	if site:
-		values["site_bench"] = site_bench
-	if server:
-		values["server"] = server
-	source_benches_info = frappe.db.sql(
-		f"""
-		SELECT sb.name AS source_bench, sb.candidate AS source_candidate, sb.server AS server, dcd.destination AS destination_candidate
-		FROM `tabBench` sb, `tabDeploy Candidate Difference` dcd
-		WHERE sb.status IN ('Active', 'Broken') AND sb.candidate = dcd.source
-		{"AND sb.name = %(site_bench)s" if site else ""}
-		{"AND sb.server = %(server)s" if server else ""}
-		""",
-		values=values,
-		as_dict=True,
+	Bench = frappe.qb.DocType("Bench")
+	DeployCandidateDifference = frappe.qb.DocType("Deploy Candidate Difference")
+	query = (
+		frappe.qb.from_(Bench)
+		.join(DeployCandidateDifference)
+		.on(Bench.candidate == DeployCandidateDifference.source)
+		.select(
+			Bench.name.as_("source_bench"),
+			Bench.candidate.as_("source_candidate"),
+			Bench.server.as_("server"),
+			DeployCandidateDifference.destination.as_("destination_candidate"),
+		)
+		.where(Bench.status.isin(["Active", "Broken"]))
 	)
+	if site:
+		query = query.where(Bench.name == site_bench)
+	if server:
+		query = query.where(Bench.server == server)
+	source_benches_info = query.run(as_dict=True)
 
 	destination_candidates = list(set(d["destination_candidate"] for d in source_benches_info))
 
@@ -1092,7 +1097,7 @@ def is_site_in_deploy_hours(site: Site):
 	if site.is_standby:
 		return True
 	server_time = datetime.now()
-	timezone = site.timezone or "Asia/Kolkata"
+	timezone = site.timezone or DEFAULT_SITE_TIMEZONE
 	site_timezone = pytz.timezone(timezone)
 	site_time = server_time.astimezone(site_timezone)
 	deploy_hours = frappe.get_hooks("deploy_hours")
@@ -1100,6 +1105,21 @@ def is_site_in_deploy_hours(site: Site):
 	if site_time.hour in deploy_hours:
 		return True
 	return False
+
+
+def get_deploy_hour_windows() -> list[list[int]]:
+	"""Group the `deploy_hours` hook into `[start_hour, end_hour]` windows.
+
+	The hours are hours of the day in the timezone of the site. An end hour of
+	24 is midnight. The dashboard shows these windows to the user.
+	"""
+	windows: list[list[int]] = []
+	for hour in sorted(set(frappe.get_hooks("deploy_hours"))):
+		if windows and windows[-1][1] == hour:
+			windows[-1][1] = hour + 1
+		else:
+			windows.append([hour, hour + 1])
+	return windows
 
 
 def process_physical_backup_restoration_status_update(name: str):

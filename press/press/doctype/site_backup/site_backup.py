@@ -633,12 +633,18 @@ def get_requested_bucket(job) -> str | None:
 
 
 def get_backup_bucket(cluster, region=False):
-	bucket_for_cluster = frappe.get_all(
-		"Backup Bucket",
-		{"cluster": cluster, "purpose": ("in", ("Cluster Backups", "", None)), "site": ("is", "not set")},
-		["name", "region", "endpoint_url"],
-		limit=1,
+	# Aretenic: a cluster also has binlog buckets and each school's own (ADR 041), so only a
+	# cluster-backups bucket counts, whether the Cluster names it or it is tagged with the cluster
+	cluster_backups = {"purpose": ("in", ("Cluster Backups", "", None)), "site": ("is", "not set")}
+	fields = ["name", "region", "endpoint_url"]
+	bucket_name = frappe.db.get_value("Cluster", cluster, "backup_bucket")
+	bucket_for_cluster = bucket_name and frappe.get_all(
+		"Backup Bucket", {"name": bucket_name, **cluster_backups}, fields, limit=1
 	)
+	if not bucket_for_cluster:
+		bucket_for_cluster = frappe.get_all(
+			"Backup Bucket", {"cluster": cluster, **cluster_backups}, fields, limit=1
+		)
 
 	# `provider` and `endpoint_url` are only configured globally on Press Settings, so the
 	# provider is always sourced from there regardless of whether a cluster bucket is used.
