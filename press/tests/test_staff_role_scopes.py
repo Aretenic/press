@@ -39,6 +39,9 @@ SYSTEM_MANAGER_ONLY = {
 	# Aretenic: holds the per-site geocoding tokens (ADR 053)
 	"Geocoding Token",
 	"Mail Setup",
+	# Aretenic: hosted messaging's Twilio and AWS keys and the per-site tokens (ADR 094)
+	"Messaging Account",
+	"Messaging Settings",
 	"Mpesa Setup",
 	"Payment Gateway",
 	"Press Settings",

@@ -1,0 +1,168 @@
+{
+	"actions": [],
+	"creation": "2026-11-23 12:00:00.000000",
+	"doctype": "DocType",
+	"engine": "InnoDB",
+	"field_order": [
+		"account",
+		"purpose",
+		"kind",
+		"status",
+		"column_break_status",
+		"number",
+		"phone_number_sid",
+		"verification_sid",
+		"reason",
+		"billed_from",
+		"registration_section",
+		"use_case",
+		"sample_messages",
+		"monthly_volume",
+		"brand",
+		"registration_fees"
+	],
+	"fields": [
+		{
+			"fieldname": "account",
+			"fieldtype": "Link",
+			"label": "Messaging Account",
+			"options": "Messaging Account",
+			"reqd": 1,
+			"in_list_view": 1,
+			"in_standard_filter": 1
+		},
+		{
+			"fieldname": "purpose",
+			"fieldtype": "Select",
+			"label": "Used For",
+			"options": "General\nPromotional",
+			"default": "General",
+			"in_list_view": 1
+		},
+		{
+			"fieldname": "kind",
+			"fieldtype": "Select",
+			"label": "Kind",
+			"options": "Toll-free\n10DLC",
+			"default": "Toll-free",
+			"in_list_view": 1
+		},
+		{
+			"fieldname": "status",
+			"fieldtype": "Select",
+			"label": "Status",
+			"options": "submitted\nin_review\napproved\nrejected\nreleased",
+			"default": "submitted",
+			"in_list_view": 1,
+			"in_standard_filter": 1
+		},
+		{
+			"fieldname": "column_break_status",
+			"fieldtype": "Column Break"
+		},
+		{
+			"fieldname": "number",
+			"fieldtype": "Data",
+			"label": "Number",
+			"options": "Phone",
+			"in_list_view": 1
+		},
+		{
+			"fieldname": "phone_number_sid",
+			"fieldtype": "Data",
+			"label": "Phone Number SID",
+			"read_only": 1
+		},
+		{
+			"fieldname": "verification_sid",
+			"fieldtype": "Data",
+			"label": "Verification SID",
+			"read_only": 1
+		},
+		{
+			"fieldname": "reason",
+			"fieldtype": "Small Text",
+			"label": "Rejection Reason"
+		},
+		{
+			"fieldname": "billed_from",
+			"fieldtype": "Date",
+			"label": "Billed From",
+			"description": "Extra numbers are billed per month from this date."
+		},
+		{
+			"fieldname": "registration_section",
+			"fieldtype": "Section Break",
+			"label": "What the School Registered"
+		},
+		{
+			"fieldname": "use_case",
+			"fieldtype": "Small Text",
+			"label": "Use Case",
+			"read_only": 1
+		},
+		{
+			"fieldname": "sample_messages",
+			"fieldtype": "Small Text",
+			"label": "Sample Messages",
+			"read_only": 1
+		},
+		{
+			"fieldname": "monthly_volume",
+			"fieldtype": "Int",
+			"label": "Texts per Month",
+			"read_only": 1
+		},
+		{
+			"fieldname": "brand",
+			"fieldtype": "Code",
+			"label": "Brand",
+			"options": "JSON",
+			"read_only": 1
+		},
+		{
+			"fieldname": "registration_fees",
+			"fieldtype": "Currency",
+			"label": "Registration Fees to Bill",
+			"options": "USD",
+			"description": "10DLC brand and campaign fees, passed through on the next statement."
+		}
+	],
+	"index_web_pages_for_search": 0,
+	"links": [],
+	"modified": "2026-11-23 12:00:00.000000",
+	"modified_by": "Administrator",
+	"module": "Press",
+	"name": "Messaging Number",
+	"owner": "Administrator",
+	"sort_field": "creation",
+	"sort_order": "DESC",
+	"states": [],
+	"autoname": "hash",
+	"description": "A number a school texts from, and its registration with the carriers (Aretenic ADR 094 §3–§4).",
+	"title_field": "number",
+	"track_changes": 1,
+	"permissions": [
+		{
+			"role": "System Manager",
+			"read": 1,
+			"report": 1,
+			"export": 1,
+			"print": 1,
+			"email": 1,
+			"share": 1,
+			"write": 1,
+			"create": 1,
+			"delete": 1
+		},
+		{
+			"role": "Press Infrastructure Manager",
+			"read": 1,
+			"report": 1,
+			"export": 1,
+			"print": 1,
+			"email": 1,
+			"share": 1
+		}
+	]
+}

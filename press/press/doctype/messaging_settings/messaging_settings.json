@@ -1,0 +1,177 @@
+{
+	"actions": [],
+	"creation": "2026-11-23 12:00:00.000000",
+	"doctype": "DocType",
+	"engine": "InnoDB",
+	"field_order": [
+		"enabled",
+		"base_url",
+		"alerts_email",
+		"twilio_section",
+		"twilio_account_sid",
+		"twilio_auth_token",
+		"margin_percent",
+		"whatsapp_cost_per_message",
+		"aws_section",
+		"aws_region",
+		"aws_access_key_id",
+		"aws_secret_access_key",
+		"sending_root_domain",
+		"ses_sns_topic_arn",
+		"column_break_ses",
+		"pause_bounce_rate",
+		"pause_complaint_rate",
+		"rate_window_sends",
+		"new_school_daily_emails",
+		"daily_limit_growth"
+	],
+	"fields": [
+		{
+			"fieldname": "enabled",
+			"fieldtype": "Check",
+			"label": "Enabled",
+			"description": "Off: no site can be given hosted messaging, and the proxy refuses everything."
+		},
+		{
+			"fieldname": "base_url",
+			"fieldtype": "Data",
+			"label": "Proxy Base URL",
+			"default": "https://messaging.aretenic.com/messaging",
+			"description": "What sites call. The hostname points at this Press."
+		},
+		{
+			"fieldname": "alerts_email",
+			"fieldtype": "Data",
+			"label": "Alerts To",
+			"options": "Email",
+			"description": "Pauses, spent allowances and registrations that need a person go here."
+		},
+		{
+			"fieldname": "twilio_section",
+			"fieldtype": "Section Break",
+			"label": "Twilio"
+		},
+		{
+			"fieldname": "twilio_account_sid",
+			"fieldtype": "Data",
+			"label": "Parent Account SID"
+		},
+		{
+			"fieldname": "twilio_auth_token",
+			"fieldtype": "Password",
+			"label": "Parent Auth Token"
+		},
+		{
+			"fieldname": "margin_percent",
+			"fieldtype": "Percent",
+			"label": "Margin on Pass-Through",
+			"default": "20",
+			"description": "Added to Twilio's price for international texts and WhatsApp."
+		},
+		{
+			"fieldname": "whatsapp_cost_per_message",
+			"fieldtype": "Currency",
+			"label": "WhatsApp Cost per Message",
+			"options": "USD",
+			"default": "0.03",
+			"description": "Meta's template price plus Twilio's fee. Twilio's price list does not cover WhatsApp."
+		},
+		{
+			"fieldname": "aws_section",
+			"fieldtype": "Section Break",
+			"label": "Amazon SES"
+		},
+		{
+			"fieldname": "aws_region",
+			"fieldtype": "Data",
+			"label": "Region",
+			"default": "us-east-1"
+		},
+		{
+			"fieldname": "aws_access_key_id",
+			"fieldtype": "Data",
+			"label": "Access Key ID"
+		},
+		{
+			"fieldname": "aws_secret_access_key",
+			"fieldtype": "Password",
+			"label": "Secret Access Key"
+		},
+		{
+			"fieldname": "sending_root_domain",
+			"fieldtype": "Link",
+			"label": "Sending Root Domain",
+			"options": "Root Domain",
+			"description": "Each school sends from <school>.mail.<this domain>. On Route 53 its DKIM records are written for us."
+		},
+		{
+			"fieldname": "ses_sns_topic_arn",
+			"fieldtype": "Data",
+			"label": "SNS Topic for SES Events"
+		},
+		{
+			"fieldname": "column_break_ses",
+			"fieldtype": "Column Break"
+		},
+		{
+			"fieldname": "pause_bounce_rate",
+			"fieldtype": "Percent",
+			"label": "Pause at Bounce Rate",
+			"default": "3",
+			"description": "SES reviews an account at 5% and may pause it at 10%."
+		},
+		{
+			"fieldname": "pause_complaint_rate",
+			"fieldtype": "Float",
+			"label": "Pause at Complaint Rate (%)",
+			"default": "0.08",
+			"precision": "3",
+			"description": "SES reviews at 0.1% and may pause at 0.5%."
+		},
+		{
+			"fieldname": "rate_window_sends",
+			"fieldtype": "Int",
+			"label": "Judge Rates Over the Last",
+			"default": "500",
+			"description": "Sends. Fewer than this, and no school is paused."
+		},
+		{
+			"fieldname": "new_school_daily_emails",
+			"fieldtype": "Int",
+			"label": "New School Daily Email Limit",
+			"default": "2000"
+		},
+		{
+			"fieldname": "daily_limit_growth",
+			"fieldtype": "Int",
+			"label": "Daily Limit Doubles Every (Days)",
+			"default": "7"
+		}
+	],
+	"index_web_pages_for_search": 0,
+	"links": [],
+	"modified": "2026-11-23 12:00:00.000000",
+	"modified_by": "Administrator",
+	"module": "Press",
+	"name": "Messaging Settings",
+	"owner": "Administrator",
+	"sort_field": "creation",
+	"sort_order": "DESC",
+	"states": [],
+	"issingle": 1,
+	"description": "Our Twilio parent account and AWS account for hosted messaging (Aretenic ADR 094). One per Press.",
+	"permissions": [
+		{
+			"role": "System Manager",
+			"read": 1,
+			"report": 1,
+			"export": 1,
+			"print": 1,
+			"email": 1,
+			"share": 1,
+			"write": 1,
+			"create": 1,
+			"delete": 1
+		}
+	]
+}

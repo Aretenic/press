@@ -1,0 +1,147 @@
+{
+	"actions": [],
+	"creation": "2026-11-23 12:00:00.000000",
+	"doctype": "DocType",
+	"engine": "InnoDB",
+	"field_order": [
+		"site",
+		"date",
+		"texts",
+		"international_texts",
+		"international_cost",
+		"column_break_1",
+		"whatsapp_messages",
+		"whatsapp_cost",
+		"emails",
+		"bounces",
+		"complaints",
+		"refused"
+	],
+	"fields": [
+		{
+			"fieldname": "site",
+			"fieldtype": "Link",
+			"label": "Site",
+			"options": "Site",
+			"reqd": 1,
+			"in_list_view": 1,
+			"in_standard_filter": 1,
+			"search_index": 1
+		},
+		{
+			"fieldname": "date",
+			"fieldtype": "Date",
+			"label": "Date",
+			"reqd": 1,
+			"in_list_view": 1,
+			"search_index": 1
+		},
+		{
+			"fieldname": "texts",
+			"fieldtype": "Int",
+			"label": "Texts (US and Canada)",
+			"default": "0",
+			"in_list_view": 1
+		},
+		{
+			"fieldname": "international_texts",
+			"fieldtype": "Int",
+			"label": "International Texts",
+			"default": "0"
+		},
+		{
+			"fieldname": "international_cost",
+			"fieldtype": "Currency",
+			"label": "International Cost",
+			"options": "USD",
+			"default": "0"
+		},
+		{
+			"fieldname": "column_break_1",
+			"fieldtype": "Column Break"
+		},
+		{
+			"fieldname": "whatsapp_messages",
+			"fieldtype": "Int",
+			"label": "WhatsApp Messages",
+			"default": "0"
+		},
+		{
+			"fieldname": "whatsapp_cost",
+			"fieldtype": "Currency",
+			"label": "WhatsApp Cost",
+			"options": "USD",
+			"default": "0"
+		},
+		{
+			"fieldname": "emails",
+			"fieldtype": "Int",
+			"label": "Emails",
+			"default": "0",
+			"in_list_view": 1
+		},
+		{
+			"fieldname": "bounces",
+			"fieldtype": "Int",
+			"label": "Bounces",
+			"default": "0"
+		},
+		{
+			"fieldname": "complaints",
+			"fieldtype": "Int",
+			"label": "Complaints",
+			"default": "0"
+		},
+		{
+			"fieldname": "refused",
+			"fieldtype": "Int",
+			"label": "Refused",
+			"default": "0"
+		}
+	],
+	"index_web_pages_for_search": 0,
+	"links": [],
+	"modified": "2026-11-23 12:00:00.000000",
+	"modified_by": "Administrator",
+	"module": "Press",
+	"name": "Messaging Usage",
+	"owner": "Administrator",
+	"sort_field": "date",
+	"sort_order": "DESC",
+	"states": [],
+	"autoname": "Prompt",
+	"in_create": 1,
+	"description": "A site's hosted messaging in one day. Counts and costs only: no message, number or address is kept (Aretenic ADR 094 §2).",
+	"permissions": [
+		{
+			"role": "System Manager",
+			"read": 1,
+			"report": 1,
+			"export": 1,
+			"print": 1,
+			"email": 1,
+			"share": 1,
+			"write": 1,
+			"create": 1,
+			"delete": 1
+		},
+		{
+			"role": "Press Infrastructure Manager",
+			"read": 1,
+			"report": 1,
+			"export": 1,
+			"print": 1,
+			"email": 1,
+			"share": 1
+		},
+		{
+			"role": "Press Billing Manager",
+			"read": 1,
+			"report": 1,
+			"export": 1,
+			"print": 1,
+			"email": 1,
+			"share": 1
+		}
+	]
+}

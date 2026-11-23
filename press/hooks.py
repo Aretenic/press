@@ -191,6 +191,8 @@ doc_events = {
 	"Site": {
 		"before_insert": "press.press.doctype.team.team.validate_site_creation",
 		"after_insert": "press.press.doctype.press_role.press_role.create_user_resource",
+		# ARETENIC (ADR 094): archiving a site revokes its hosted messaging
+		"on_update": "press.messaging.provision.on_site_update",
 	},
 	"Marketplace App Subscription": {
 		"on_update": "press.press.doctype.storage_integration_subscription.storage_integration_subscription.create_after_insert",
@@ -225,6 +227,8 @@ scheduler_events = {
 		"press.press.doctype.team.team.check_budget_alerts",
 		"press.press.doctype.site.site.archive_creation_failed_sites",
 		"press.press.doctype.server.server.process_running_benches_on_server",
+		# ARETENIC (ADR 094 §7): lift daily-limit pauses, let healthy schools send more
+		"press.messaging.reputation.daily",
 	],
 	"daily_long": [
 		"press.press.doctype.site_adoption_snapshot.site_adoption_snapshot.record_daily_snapshot",
@@ -317,8 +321,13 @@ scheduler_events = {
 		"press.press.doctype.site.sync.sync_setup_wizard_status",
 		"press.school_provisioning.pipeline.advance_running",
 		"press.press.doctype.agent_job.agent_job.flush",
+		# ARETENIC (ADR 094 §4, §7): carrier reviews; pause a school's email before SES would
+		"press.messaging.registration.poll",
+		"press.messaging.reputation.check_all",
 	],
 	"cron": {
+		# ARETENIC (ADR 094 §8): last month's messaging statements
+		"0 3 1 * *": ["press.messaging.usage.monthly_statements"],
 		"1-59/2 * * * *": [
 			"press.press.doctype.incident.incident.validate_incidents",
 		],
@@ -503,6 +512,8 @@ on_login = "press.overrides.on_login"
 before_request = [
 	# ARETENIC (ADR 053): first, so no other hook sees a proxy token as a login attempt
 	"press.geocoding.proxy.before_request",
+	# ARETENIC (ADR 094): the same for the messaging proxy
+	"press.messaging.proxy.before_request",
 	"press.overrides.before_request",
 	"press.access.staff_roles.use_saved_document",
 	"press.access.staff_roles.check_staff_role",
@@ -521,7 +532,11 @@ user_data_fields = [
 
 auth_hooks = ["press.auth.hook"]
 
-page_renderer = ["press.metrics.MetricsRenderer", "press.geocoding.proxy.GeocodingProxyRenderer"]
+page_renderer = [
+	"press.metrics.MetricsRenderer",
+	"press.geocoding.proxy.GeocodingProxyRenderer",
+	"press.messaging.proxy.MessagingProxyRenderer",
+]
 
 export_python_type_annotations = True
 

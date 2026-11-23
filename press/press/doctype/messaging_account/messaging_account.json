@@ -1,0 +1,247 @@
+{
+	"actions": [],
+	"creation": "2026-11-23 12:00:00.000000",
+	"doctype": "DocType",
+	"engine": "InnoDB",
+	"field_order": [
+		"site",
+		"status",
+		"token_hash",
+		"token_issued_on",
+		"column_break_status",
+		"email_paused",
+		"email_paused_reason",
+		"email_daily_limit",
+		"twilio_section",
+		"twilio_subaccount_sid",
+		"twilio_subaccount_token",
+		"messaging_service_sid",
+		"column_break_twilio",
+		"whatsapp_ready",
+		"whatsapp_number",
+		"ses_section",
+		"ses_tenant",
+		"ses_identity",
+		"ses_configuration_set",
+		"ses_promotional_configuration_set",
+		"column_break_ses",
+		"iam_user",
+		"dkim_records",
+		"school_settings_section",
+		"overuse",
+		"international_countries",
+		"whatsapp",
+		"column_break_school",
+		"help_text"
+	],
+	"fields": [
+		{
+			"fieldname": "site",
+			"fieldtype": "Link",
+			"label": "Site",
+			"options": "Site",
+			"reqd": 1,
+			"unique": 1,
+			"in_list_view": 1
+		},
+		{
+			"fieldname": "status",
+			"fieldtype": "Select",
+			"label": "Status",
+			"options": "Draft\nActive\nRevoked",
+			"default": "Draft",
+			"in_list_view": 1,
+			"in_standard_filter": 1,
+			"read_only": 1
+		},
+		{
+			"fieldname": "token_hash",
+			"fieldtype": "Data",
+			"label": "Token Hash",
+			"hidden": 1,
+			"search_index": 1,
+			"read_only": 1
+		},
+		{
+			"fieldname": "token_issued_on",
+			"fieldtype": "Datetime",
+			"label": "Token Issued On",
+			"read_only": 1
+		},
+		{
+			"fieldname": "column_break_status",
+			"fieldtype": "Column Break"
+		},
+		{
+			"fieldname": "email_paused",
+			"fieldtype": "Check",
+			"label": "Email Paused",
+			"in_list_view": 1,
+			"read_only": 1
+		},
+		{
+			"fieldname": "email_paused_reason",
+			"fieldtype": "Small Text",
+			"label": "Why Email Is Paused",
+			"depends_on": "email_paused",
+			"read_only": 1
+		},
+		{
+			"fieldname": "email_daily_limit",
+			"fieldtype": "Int",
+			"label": "Daily Email Limit",
+			"description": "Rises while the school's bounce and complaint rates stay low."
+		},
+		{
+			"fieldname": "twilio_section",
+			"fieldtype": "Section Break",
+			"label": "Twilio"
+		},
+		{
+			"fieldname": "twilio_subaccount_sid",
+			"fieldtype": "Data",
+			"label": "Subaccount SID",
+			"read_only": 1
+		},
+		{
+			"fieldname": "twilio_subaccount_token",
+			"fieldtype": "Password",
+			"label": "Subaccount Auth Token",
+			"read_only": 1
+		},
+		{
+			"fieldname": "messaging_service_sid",
+			"fieldtype": "Data",
+			"label": "Messaging Service SID",
+			"read_only": 1
+		},
+		{
+			"fieldname": "column_break_twilio",
+			"fieldtype": "Column Break"
+		},
+		{
+			"fieldname": "whatsapp_ready",
+			"fieldtype": "Check",
+			"label": "WhatsApp Sender Approved",
+			"description": "Tick once Meta has verified the school and approved its sender in Twilio."
+		},
+		{
+			"fieldname": "whatsapp_number",
+			"fieldtype": "Data",
+			"label": "WhatsApp Number",
+			"options": "Phone"
+		},
+		{
+			"fieldname": "ses_section",
+			"fieldtype": "Section Break",
+			"label": "SES"
+		},
+		{
+			"fieldname": "ses_tenant",
+			"fieldtype": "Data",
+			"label": "Tenant",
+			"read_only": 1
+		},
+		{
+			"fieldname": "ses_identity",
+			"fieldtype": "Data",
+			"label": "Sending Domain",
+			"read_only": 1
+		},
+		{
+			"fieldname": "ses_configuration_set",
+			"fieldtype": "Data",
+			"label": "Notices Configuration Set",
+			"read_only": 1
+		},
+		{
+			"fieldname": "ses_promotional_configuration_set",
+			"fieldtype": "Data",
+			"label": "Promotional Configuration Set",
+			"read_only": 1
+		},
+		{
+			"fieldname": "column_break_ses",
+			"fieldtype": "Column Break"
+		},
+		{
+			"fieldname": "iam_user",
+			"fieldtype": "Data",
+			"label": "SMTP User",
+			"read_only": 1
+		},
+		{
+			"fieldname": "dkim_records",
+			"fieldtype": "Code",
+			"label": "DKIM Records",
+			"options": "JSON",
+			"description": "Written for us when the sending domain is on Route 53; otherwise add them by hand.",
+			"read_only": 1
+		},
+		{
+			"fieldname": "school_settings_section",
+			"fieldtype": "Section Break",
+			"label": "The School's Choices",
+			"description": "Pushed by the site from Aretenic Settings."
+		},
+		{
+			"fieldname": "overuse",
+			"fieldtype": "Select",
+			"label": "When Texts Run Out",
+			"options": "email\nkeep",
+			"default": "email",
+			"read_only": 1
+		},
+		{
+			"fieldname": "international_countries",
+			"fieldtype": "Small Text",
+			"label": "International Countries",
+			"description": "ISO codes, comma-separated.",
+			"read_only": 1
+		},
+		{
+			"fieldname": "whatsapp",
+			"fieldtype": "Check",
+			"label": "WhatsApp On",
+			"read_only": 1
+		},
+		{
+			"fieldname": "column_break_school",
+			"fieldtype": "Column Break"
+		},
+		{
+			"fieldname": "help_text",
+			"fieldtype": "Small Text",
+			"label": "HELP Reply",
+			"read_only": 1
+		}
+	],
+	"index_web_pages_for_search": 0,
+	"links": [],
+	"modified": "2026-11-23 12:00:00.000000",
+	"modified_by": "Administrator",
+	"module": "Press",
+	"name": "Messaging Account",
+	"owner": "Administrator",
+	"sort_field": "creation",
+	"sort_order": "DESC",
+	"states": [],
+	"autoname": "field:site",
+	"description": "A school's hosted messaging: its token, Twilio subaccount and SES tenant (Aretenic ADR 094). Only the token's hash is kept.",
+	"title_field": "site",
+	"track_changes": 1,
+	"permissions": [
+		{
+			"role": "System Manager",
+			"read": 1,
+			"report": 1,
+			"export": 1,
+			"print": 1,
+			"email": 1,
+			"share": 1,
+			"write": 1,
+			"create": 1,
+			"delete": 1
+		}
+	]
+}
