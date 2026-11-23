@@ -7,10 +7,12 @@ what it is billed. Twilio's own segment count, returned after sending, is what i
 
 from __future__ import annotations
 
+# cspell:disable
 _GSM_BASIC = set(
 	"@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?"
 	"¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà"
 )
+# cspell:enable
 _GSM_EXTENDED = set("^{}\\[~]|€\f")
 
 
