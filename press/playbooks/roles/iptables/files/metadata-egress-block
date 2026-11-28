@@ -1,0 +1,23 @@
+#!/bin/sh
+# Aretenic (decisions 103): block the cloud metadata service from this host and from its
+# containers. Run by metadata-egress-block.service after cloud-init, which needs the service at
+# boot to set up the network. Each rule is added only if it is missing, so this is safe to re-run.
+set -eu
+
+METADATA=169.254.169.254
+PORTS="80,443"
+
+if ! iptables -C OUTPUT -p tcp -d "$METADATA" -m multiport --dports "$PORTS" \
+	-j REJECT --reject-with icmp-port-unreachable 2>/dev/null; then
+	iptables -I OUTPUT 1 -p tcp -d "$METADATA" -m multiport --dports "$PORTS" \
+		-j REJECT --reject-with icmp-port-unreachable
+fi
+
+# Docker evaluates DOCKER-USER before its own rules and never flushes it. A FORWARD rule does not
+# survive a Docker restart, which puts Docker's accept rules ahead of it.
+if iptables -n -L DOCKER-USER >/dev/null 2>&1; then
+	if ! iptables -C DOCKER-USER -i docker0 -p tcp -d "$METADATA" -m multiport --dports "$PORTS" \
+		-j DROP 2>/dev/null; then
+		iptables -I DOCKER-USER 1 -i docker0 -p tcp -d "$METADATA" -m multiport --dports "$PORTS" -j DROP
+	fi
+fi

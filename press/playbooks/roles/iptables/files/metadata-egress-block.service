@@ -1,0 +1,17 @@
+# Aretenic (decisions 103): re-apply the metadata egress block on every boot, after cloud-init has
+# used the metadata service to set up the network, and after Docker has created DOCKER-USER.
+# Wanted by cloud-init.target, not multi-user.target: cloud-final runs after multi-user.target, so a
+# unit wanted by multi-user.target and ordered after cloud-final is an ordering cycle, and systemd
+# drops it at boot (seen on p1-ord, 2026-11-28).
+[Unit]
+Description=Block the cloud metadata service from the host and its containers
+After=cloud-final.service docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/metadata-egress-block
+
+[Install]
+WantedBy=cloud-init.target

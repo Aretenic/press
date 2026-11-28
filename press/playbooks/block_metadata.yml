@@ -1,0 +1,9 @@
+---
+# Aretenic (decisions 103): apply the metadata egress block to existing servers
+- name: Block the Cloud Metadata Service
+  hosts: all
+  become: yes
+  become_user: root
+  gather_facts: no
+  roles:
+    - role: iptables

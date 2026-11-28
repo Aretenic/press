@@ -17,3 +17,4 @@
     - role: kibana
     - role: filebeat_elasticsearch
     - role: fail2ban
+    - role: iptables  # Aretenic (decisions 103): last, so Docker is set up first

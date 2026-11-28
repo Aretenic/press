@@ -31,3 +31,36 @@
 
 - name: Save iptables rules
   shell: iptables-save > /etc/iptables/rules.v4
+
+# Aretenic (decisions 103): the rules above are live only, nothing restores them at boot, and the
+# FORWARD rule stops matching once Docker restarts. A unit re-applies the block on every boot,
+# after cloud-init (which needs the metadata service to set up the network) and after Docker.
+- name: Install the metadata egress block script
+  copy:
+    src: metadata-egress-block
+    dest: /usr/local/sbin/metadata-egress-block
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Install the metadata egress block unit
+  copy:
+    src: metadata-egress-block.service
+    dest: /etc/systemd/system/metadata-egress-block.service
+    owner: root
+    group: root
+    mode: '0644'
+
+# The first version was wanted by multi-user.target, an ordering cycle that systemd breaks by
+# dropping the unit at boot. `enabled: yes` does not remove that old link, so remove it here.
+- name: Remove the metadata egress block's old multi-user.target link
+  file:
+    path: /etc/systemd/system/multi-user.target.wants/metadata-egress-block.service
+    state: absent
+
+- name: Enable the metadata egress block and apply it now
+  systemd:
+    name: metadata-egress-block
+    enabled: yes
+    state: restarted
+    daemon_reload: yes

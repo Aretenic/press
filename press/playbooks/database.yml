@@ -27,3 +27,4 @@
     - role: sshd_hardening
     - role: fail2ban
     - role: pam
+    - role: iptables  # Aretenic (decisions 103): last, so Docker is set up first
