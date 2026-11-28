@@ -1530,6 +1530,7 @@ class BaseServer(Document, TagHelpers):
 			if vm_status == "Terminated":
 				self.status = "Archived"
 				self.save()
+				self.disable_subscription()
 				return
 
 		if frappe.db.exists(
@@ -1624,6 +1625,11 @@ class BaseServer(Document, TagHelpers):
 
 	def _archive(self, reason=None):
 		self.run_press_job("Archive Server", arguments={"reason": reason})
+
+	def mark_provisioning_failed(self):
+		"""The machine is gone, so stop billing for a server that cannot come up."""
+		frappe.db.set_value(self.doctype, self.name, "status", "Broken")
+		self.disable_subscription()
 
 	def disable_subscription(self):
 		subscription = self.subscription
@@ -1940,6 +1946,17 @@ class BaseServer(Document, TagHelpers):
 			ansible.run()
 		except Exception:
 			log_error("Swappiness Setup Exception", doc=self)
+
+	def block_sctp(self):
+		frappe.enqueue_doc(self.doctype, self.name, "_block_sctp")
+
+	def _block_sctp(self):
+		Ansible(
+			playbook="block_sctp.yml",
+			server=self,
+			user=self._ssh_user(),
+			port=self._ssh_port(),
+		).run()
 
 	@frappe.whitelist()
 	def update_tls_certificate(self, throw_on_failure: bool = False):
@@ -2364,9 +2381,10 @@ class BaseServer(Document, TagHelpers):
 					),
 				},
 			)
-			ansible.run()
+			return ansible.run()
 		except Exception:
 			log_error("NAT Iptables Setup Exception", server=self.as_dict())
+			return None
 
 	@frappe.whitelist()
 	def remove_nat_iptables(self):
@@ -2891,6 +2909,7 @@ node_filesystem_avail_bytes{{instance="{self.name}", mountpoint="{mountpoint}"}}
 		"""Set both `Server` and `Database Server` additional config for Unified Servers"""
 		# Common config for both Server and Database Server
 		self.set_swappiness()
+		self.block_sctp()
 		self.add_glass_file()
 		self.install_filebeat()
 
@@ -2938,6 +2957,7 @@ node_filesystem_avail_bytes{{instance="{self.name}", mountpoint="{mountpoint}"}}
 				self.add_or_update_mariadb_variable("tmpdir", "value_str", "/opt/volumes/mariadb/tmp")
 
 		self.set_swappiness()
+		self.block_sctp()
 		self.add_glass_file()
 		self.install_filebeat()
 		self.install_wazuh_agent_if_configured()
@@ -3033,7 +3053,15 @@ node_filesystem_avail_bytes{{instance="{self.name}", mountpoint="{mountpoint}"}}
 	@frappe.whitelist()
 	def get_static_ip(self):
 		if self.provider == "AWS EC2":
-			return self.get_aws_static_ip()
+			frappe.enqueue_doc(
+				self.doctype,
+				self.name,
+				"get_aws_static_ip",
+				timeout=1200,
+				deduplicate=True,
+				job_id=f"get_static_ip||{self.doctype}||{self.name}",
+			)
+			return "Queued the static IP job. The IP shows here once it finishes. Check Ansible Plays if not."
 		if self.provider == "OCI":
 			return self.get_oci_static_ip()
 
@@ -3041,6 +3069,15 @@ node_filesystem_avail_bytes{{instance="{self.name}", mountpoint="{mountpoint}"}}
 		return None
 
 	def get_aws_static_ip(self):
+		try:
+			self._get_aws_static_ip()
+		except Exception as e:
+			# Queued job: a comment on the form is where staff see the failure
+			self.add_comment(text=f"Get Static IP failed: {e}")
+			frappe.db.commit()
+			raise
+
+	def _get_aws_static_ip(self):
 		cluster_doc = frappe.get_doc("Cluster", self.cluster)
 		region_name = cluster_doc.region
 		aws_access_key_id = cluster_doc.aws_access_key_id
@@ -3059,18 +3096,57 @@ node_filesystem_avail_bytes{{instance="{self.name}", mountpoint="{mountpoint}"}}
 			region_name=region_name,
 		)
 
-		# Allocate new Elastic IP
-		allocation = ec2_client.allocate_address(Domain="vpc")
-		allocation_id = allocation["AllocationId"]
-		public_ip = allocation["PublicIp"]
+		allocation_id, association_id = self._attach_elastic_ip(ec2_client, instance_id)
 
-		# Associate with instance
-		ec2_client.associate_address(InstanceId=instance_id, AllocationId=allocation_id)
+		# Before the sync saves the IP, so Ansible still connects over the private IP
+		if getattr(self, "nat_server", None):
+			self._remove_nat_route_for_static_ip(ec2_client, allocation_id, association_id)
 
 		# Trigger VM sync
 		vm_doc.sync()
 
-		return f"Static IP {public_ip} alloted to the VM (Allocation ID: {allocation_id})"
+	def _attach_elastic_ip(self, ec2_client, instance_id: str) -> tuple[str, str]:
+		"""Reuse an Elastic IP that a failed earlier run left attached, else allocate one."""
+		addresses = ec2_client.describe_addresses(Filters=[{"Name": "instance-id", "Values": [instance_id]}])
+		if addresses["Addresses"]:
+			address = addresses["Addresses"][0]
+			return address["AllocationId"], address["AssociationId"]
+
+		allocation_id = ec2_client.allocate_address(Domain="vpc")["AllocationId"]
+		association = ec2_client.associate_address(InstanceId=instance_id, AllocationId=allocation_id)
+		return allocation_id, association["AssociationId"]
+
+	def _remove_nat_route_for_static_ip(self, ec2_client, allocation_id: str, association_id: str):
+		"""Send replies out through the new static IP, not the NAT server."""
+		play = Ansible(
+			playbook="remove_nat_iptables.yml",
+			server=self,
+			user=self._ssh_user(),
+			port=self._ssh_port(),
+		).run()
+		if play.status != "Success":
+			self._restore_nat_route_and_release_static_ip(ec2_client, allocation_id, association_id, play)
+
+		for doctype in ("Server", "Database Server"):
+			frappe.db.set_value(doctype, {"virtual_machine": self.virtual_machine}, "nat_server", None)
+
+	def _restore_nat_route_and_release_static_ip(
+		self, ec2_client, allocation_id: str, association_id: str, failed_play
+	):
+		"""Release the static IP only once the NAT route is surely back, so the server keeps egress."""
+		restore_play = self._install_nat_iptables()
+		if not restore_play or restore_play.status != "Success":
+			frappe.throw(
+				f"Could not remove the NAT route (Ansible Play {failed_play.name}) or restore it. "
+				"Kept the static IP attached so the server keeps outbound traffic."
+			)
+
+		ec2_client.disassociate_address(AssociationId=association_id)
+		ec2_client.release_address(AllocationId=allocation_id)
+		frappe.throw(
+			f"Could not remove the NAT route (Ansible Play {failed_play.name}). "
+			"Restored the NAT route and released the static IP."
+		)
 
 	@frappe.whitelist()
 	def add_hetzner_public_ip(self, primary_ip=None):

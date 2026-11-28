@@ -4,6 +4,7 @@
 from unittest.mock import patch
 
 import frappe
+from frappe.model.document import Document
 from frappe.tests.utils import FrappeTestCase
 
 from press.press.doctype.site.test_site import create_test_site
@@ -15,6 +16,7 @@ SCOPE_ROLES = {
 	"Press Support L1",
 	"Press Support Engineer",
 	"Press Infrastructure Manager",
+	"Press Infrastructure Reader",
 	"Press Release Manager",
 	"Press Billing Manager",
 	"Press Security Manager",
@@ -34,6 +36,7 @@ SHELL_ROLES = {
 HYBRID_ROLE = "Press Hybrid Server Manager"
 
 SYSTEM_MANAGER_ONLY = {
+	"Bare Metal Inventory",
 	"Build Cache Shell",
 	"Certificate Authority",
 	# Aretenic: holds the per-site geocoding tokens (ADR 053)
@@ -94,6 +97,15 @@ SECRET_FIELDS = {
 	"Saas App Subscription": ["secret_key"],
 }
 
+# Secrets that SREs need, and support does not
+INFRASTRUCTURE_SECRET_FIELDS = {
+	"Cluster": ["frappe_compute_api_key"],
+	"Monitor Server": ["webhook_token"],
+	"Storage Integration Subscription": ["secret_key"],
+	"Trace Server": ["sentry_oauth_client_secret"],
+	"Wireguard Peer": ["peer_config"],
+}
+
 SCRIPT_FIELDS = {
 	"Dashboard Banner": ["action_script"],
 	"Product Trial": ["suspension_email_content", "email_header_content", "email_account"],
@@ -111,7 +123,7 @@ SUPPORT_READS = [
 	"Marketplace App",
 	"Partner Lead",
 ]
-SUPPORT_DENIED = ["Payout Order", "Audit Log", "Wazuh Vulnerability", "SSH Certificate", "Cluster"]
+SUPPORT_DENIED = ["Payout Order", "Audit Log", "Wazuh Vulnerability", "SSH Certificate"]
 
 PROFILE_SCOPES = {
 	"Press Support L1": (SUPPORT_READS, SUPPORT_DENIED),
@@ -311,6 +323,15 @@ class TestStaffRoleScopes(FrappeTestCase):
 		self.assertTrue(frappe.has_permission("Server", "write", user=user))
 		self.assertFalse(frappe.has_permission("Server", "create", user=user))
 
+	def test_support_engineer_resizes_disks_and_support_l1_only_reads_them(self):
+		engineer = create_staff_user("Press Support Engineer")
+		l1 = create_staff_user("Press Support L1")
+		for ptype in ("create", "write"):
+			with self.subTest(ptype=ptype):
+				self.assertTrue(frappe.has_permission("Virtual Disk Resize", ptype, user=engineer))
+				self.assertFalse(frappe.has_permission("Virtual Disk Resize", ptype, user=l1))
+		self.assertFalse(frappe.has_permission("Virtual Disk Resize", "delete", user=engineer))
+
 	def test_scope_roles_cannot_call_methods_that_return_secrets(self):
 		frappe.set_user(create_staff_user(*PROFILE_SCOPES))
 		for doctype, method in SECRET_METHODS:
@@ -337,8 +358,21 @@ class TestStaffRoleScopes(FrappeTestCase):
 					"Press Support L1",
 					"Press Support Engineer",
 					"Press Infrastructure Manager",
+					"Press Infrastructure Reader",
 				}
 				self.assertEqual(leaked, set())
+
+	def test_only_system_and_infrastructure_managers_read_secrets_of_infrastructure_records(self):
+		for doctype, fieldnames in INFRASTRUCTURE_SECRET_FIELDS.items():
+			meta = frappe.get_meta(doctype)
+			with self.subTest(doctype=doctype):
+				self.assertEqual(
+					{getattr(meta.get_field(fieldname), "permlevel", None) for fieldname in fieldnames}, {1}
+				)
+				readers = frappe.get_all(
+					"DocPerm", {"parent": doctype, "permlevel": 1, "read": 1}, pluck="role"
+				)
+				self.assertEqual(set(readers), {"System Manager", "Press Infrastructure Manager"})
 
 	def test_only_system_managers_reach_fields_that_run_as_a_script_or_template(self):
 		for doctype, fieldnames in SCRIPT_FIELDS.items():
@@ -366,6 +400,53 @@ class TestStaffRoleScopes(FrappeTestCase):
 		frappe.set_user(support_user)
 		team = Team("Team", team.name)
 		team.append("team_members", {"user": support_user})
+		with self.assertRaisesRegex(frappe.PermissionError, "Only team owner or admins can make changes"):
+			team.save()
+
+	def test_support_manager_can_enable_a_team_with_members_and_a_stale_default_card(self):
+		team = create_test_team()
+		team.append("team_members", {"user": team.user})
+		team.save()
+		name = str(team.name)
+		card = frappe.get_doc(
+			{
+				"doctype": "Stripe Payment Method",
+				"team": name,
+				"stripe_customer_id": "cus_test123",
+				"stripe_payment_method_id": "pm_test123",
+				"is_default": 1,
+			}
+		).insert(ignore_permissions=True)
+		frappe.db.set_value("Team", name, "enabled", 0)
+		frappe.set_user(create_staff_user("Press Support Engineer"))
+		team = Team("Team", name)
+		team.enabled = 1
+		# Production compares rows by identity; before_test.py patches __eq__ to compare by name
+		with patch.object(Document, "__eq__", object.__eq__):
+			team.save()
+		self.assertEqual(frappe.db.get_value("Team", name, "enabled"), 1)
+		self.assertEqual(frappe.db.get_value("Stripe Payment Method", card.name, "is_default"), 0)
+
+	def test_support_manager_can_turn_off_2fa_enforcement_of_a_team(self):
+		team = create_test_team()
+		team.append("team_members", {"user": team.user})
+		team.enforce_2fa = 1
+		team.save()
+		name = str(team.name)
+		frappe.set_user(create_staff_user("Press Support Engineer"))
+		team = Team("Team", name)
+		team.enforce_2fa = 0
+		with patch.object(Document, "__eq__", object.__eq__):
+			team.save()
+		self.assertEqual(frappe.db.get_value("Team", name, "enforce_2fa"), 0)
+
+	def test_support_manager_cannot_give_a_member_access_to_all_sites(self):
+		team = create_test_team()
+		team.append("team_members", {"user": team.user})
+		team.save()
+		frappe.set_user(create_staff_user("Press Support Engineer"))
+		team = Team("Team", team.name)
+		team.team_members[-1].all_sites = 1
 		with self.assertRaisesRegex(frappe.PermissionError, "Only team owner or admins can make changes"):
 			team.save()
 

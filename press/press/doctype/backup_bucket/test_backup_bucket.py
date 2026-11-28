@@ -35,6 +35,10 @@ def create_generic_cluster(name: str, backup_bucket: str | None) -> Cluster:
 
 
 class TestBackupBucket(FrappeTestCase):
+	"""Aretenic (ADR 041): sites back up to their own R2 buckets, so a cluster's Backup Bucket stays
+	optional and get_backup_bucket keeps the Press Settings fallback. Upstream 293b21f24 made it
+	mandatory; its tests for that are replaced by the three pre-293b21f24 tests below."""
+
 	def tearDown(self):
 		frappe.db.rollback()
 
@@ -70,3 +74,32 @@ class TestBackupBucket(FrappeTestCase):
 		Cluster("Cluster", "Old").save(ignore_permissions=True)
 
 		self.assertIsNone(frappe.db.get_value("Cluster", "Old", "backup_bucket"))
+
+	def test_patch_gives_clusters_without_a_bucket_the_press_settings_bucket(self):
+		from press.patches.v0_8_0 import set_missing_cluster_backup_buckets
+
+		own_bucket = create_test_backup_bucket("own.backups.test").name
+		create_generic_cluster("Has Bucket", own_bucket)
+		create_generic_cluster("No Bucket", own_bucket).db_set("backup_bucket", None)
+		frappe.db.set_single_value("Press Settings", "aws_s3_bucket", "settings.backups.test")
+		frappe.db.set_single_value("Press Settings", "backup_region", "ap-south-1")
+
+		set_missing_cluster_backup_buckets.execute()
+		# A second run finds the bucket record and no cluster to update
+		set_missing_cluster_backup_buckets.execute()
+
+		self.assertEqual(
+			frappe.db.get_value("Cluster", "No Bucket", "backup_bucket"), "settings.backups.test"
+		)
+		self.assertEqual(frappe.db.get_value("Cluster", "Has Bucket", "backup_bucket"), own_bucket)
+		self.assertEqual(
+			frappe.db.get_value("Backup Bucket", "settings.backups.test", "region"), "ap-south-1"
+		)
+
+	def test_agent_sends_no_offsite_config_for_a_cluster_without_a_bucket(self):
+		from press.agent import Agent
+
+		cluster = create_generic_cluster("Legacy", create_test_backup_bucket("legacy.backups.test").name)
+		cluster.db_set("backup_bucket", None)
+
+		self.assertIsNone(Agent("agent.test")._get_offsite_backup_config("Legacy", "path"))

@@ -15,7 +15,7 @@ from frappe.desk.doctype.tag.tag import add_tag
 from frappe.model.document import Document
 
 from press.agent import Agent
-from press.exceptions import SiteTooManyPendingBackups
+from press.exceptions import SiteTooManyPendingBackups, SiteUpdateInProgress
 from press.guards import role_guard
 from press.overrides import get_permission_query_conditions_for_doctype
 from press.press.doctype.ansible_console.ansible_console import AnsibleAdHoc
@@ -28,6 +28,14 @@ if TYPE_CHECKING:
 	from press.press.doctype.agent_job.agent_job import AgentJob
 	from press.press.doctype.site_update.site_update import SiteUpdate
 	from press.press.doctype.virtual_machine.virtual_machine import VirtualMachine
+
+
+REMOTE_FILE_FIELDS = (
+	"remote_database_file",
+	"remote_public_file",
+	"remote_private_file",
+	"remote_config_file",
+)
 
 
 class SiteBackup(Document):
@@ -159,6 +167,13 @@ class SiteBackup(Document):
 	def before_insert(self):
 		if self.flags.get("skip_backup_after_insert"):
 			return
+
+		# The update's own physical backup runs before its migrate job, so it can't clash
+		if not self.for_site_update and frappe.get_doc("Site", self.site).is_migrate_running():
+			frappe.throw(
+				"This site is being updated. Please take a backup after the update finishes.",
+				SiteUpdateInProgress,
+			)
 
 		if getattr(self, "force", False):
 			if self.physical:
@@ -463,14 +478,18 @@ class OngoingSnapshotError(Exception):
 	pass
 
 
-def track_offsite_backups(
-	site: str, backup_data: dict, offsite_backup_data: dict, bucket: str | None = None
-) -> tuple:
+def get_uploaded_bucket(job: AgentJob) -> str:
+	"""The bucket the agent uploaded to. The cluster's bucket can change after the upload."""
+	# Aretenic: get_requested_bucket tolerates a malformed request body
+	return get_requested_bucket(job) or get_backup_bucket(frappe.db.get_value("Site", job.site, "cluster"))
+
+
+def track_offsite_backups(job: AgentJob, backup_data: dict, offsite_backup_data: dict) -> tuple:
+	site = job.site
 	remote_files = {"database": None, "site_config": None, "public": None, "private": None}
 
 	if offsite_backup_data:
-		# The bucket in the job's request is where the files are; the cluster's may differ
-		bucket = bucket or get_backup_bucket(frappe.db.get_value("Site", site, "cluster"))
+		bucket = get_uploaded_bucket(job)
 		for type, backup in backup_data.items():
 			file_name, file_size = backup["file"], backup["size"]
 			file_path = offsite_backup_data.get(file_name)
@@ -519,7 +538,7 @@ def process_backup_site_job_update(job):
 	backup = backups[0]
 	if job.status != backup.status:
 		status = job.status
-		if status == "Delivery Failure":
+		if status in ("Delivery Failure", "Cancelled"):
 			status = "Failure"
 
 		if status == "Success":
@@ -537,9 +556,7 @@ def process_backup_site_job_update(job):
 					remote_config_file,
 					remote_public,
 					remote_private,
-				) = track_offsite_backups(
-					job.site, backup_data, offsite_backup_data, get_requested_bucket(job)
-				)
+				) = track_offsite_backups(job, backup_data, offsite_backup_data)
 
 				site_backup_dict = {
 					"files_availability": "Available",
@@ -579,12 +596,12 @@ def process_backup_site_job_update(job):
 			site_backup.status = status
 			site_backup.save()
 
-			_send_backup_failure_email_to_user(site_backup)
+			_send_backup_failure_email_to_user(site_backup, cancelled=job.status == "Cancelled")
 
 
-def _send_backup_failure_email_to_user(site_backup: SiteBackup):
+def _send_backup_failure_email_to_user(site_backup: SiteBackup, cancelled: bool = False):
 	try:
-		if site_backup.status != "Failure":
+		if site_backup.status != "Failure" or cancelled:
 			return
 
 		site_name = site_backup.site
@@ -720,7 +737,7 @@ def _create_site_backup_from_agent_job(job: "AgentJob"):
 			remote_config_file,
 			remote_public,
 			remote_private,
-		) = track_offsite_backups(job.site, backup_data, offsite_backup_data, get_requested_bucket(job))
+		) = track_offsite_backups(job, backup_data, offsite_backup_data)
 
 		site_server = frappe.db.get_value("Site", job.site, "server")
 		site_backup = frappe.get_doc(
