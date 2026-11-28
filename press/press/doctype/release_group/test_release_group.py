@@ -614,6 +614,8 @@ class TestReleaseGroup(FrappeTestCase):
 		release_group.insert()
 
 	@patch.object(frappe, "enqueue_doc", new=Mock())
+	# build() commits mid-way, which would leave its builds, servers and jobs past the rollback
+	@patch("press.press.doctype.deploy_candidate_build.deploy_candidate_build.frappe.db.commit", new=Mock())
 	def test_multiple_platform_server_addition(self):
 		def create_build_and_succeed(release_group: ReleaseGroup):
 			deploy_candidate = release_group.create_deploy_candidate()

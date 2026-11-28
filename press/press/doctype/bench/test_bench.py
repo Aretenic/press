@@ -959,14 +959,17 @@ class TestArchiveObsoleteBenches(FrappeTestCase):
 			bench = create_test_bench()
 
 			# New bench will only be created if image is successfully built
+			# Filter by group: builds committed by other test modules stay in the table
 			frappe.db.set_value(
 				"Deploy Candidate Build",
-				{"status": ["!=", "Success"]},
+				{"status": ["!=", "Success"], "group": bench.group},
 				"status",
 				"Success",
 			)
 			name, candidate = frappe.db.get_value(
-				"Deploy Candidate Build", {"status": "Success"}, ["name", "deploy_candidate"]
+				"Deploy Candidate Build",
+				{"status": "Success", "group": bench.group},
+				["name", "deploy_candidate"],
 			)
 			# Use defauly build platform
 			frappe.db.set_value("Deploy Candidate", candidate, "intel_build", name)
@@ -1029,14 +1032,17 @@ class TestArchiveObsoleteBenches(FrappeTestCase):
 			bench = create_test_bench()
 
 			# New bench will only be created if image is successfully built
+			# Filter by group: builds committed by other test modules stay in the table
 			frappe.db.set_value(
 				"Deploy Candidate Build",
-				{"status": ["!=", "Success"]},
+				{"status": ["!=", "Success"], "group": bench.group},
 				"status",
 				"Success",
 			)
 			name, candidate = frappe.db.get_value(
-				"Deploy Candidate Build", {"status": "Success"}, ["name", "deploy_candidate"]
+				"Deploy Candidate Build",
+				{"status": "Success", "group": bench.group},
+				["name", "deploy_candidate"],
 			)
 			# Use default build platform
 			frappe.db.set_value("Deploy Candidate", candidate, "intel_build", name)
