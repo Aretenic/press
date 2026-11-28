@@ -332,19 +332,34 @@ def get_monitor_server_ips():
 
 
 def check_monitoring_servers_rate_limit_key():
+	"""Reset a monitor server's stuck rate-limit counter for press.api.monitoring.targets.
+
+	Aretenic: frappe's rate_limit reads the counter, sets it with a TTL only when empty, then
+	increments it; if the key expires in between, the increment recreates it without a TTL and
+	it never resets, so every `agent discover` gets a 429 and Prometheus targets freeze. A healthy key
+	always has a TTL, so no TTL (-1) means stuck. frappe 16 appends the window (":60") to the key
+	and frappe 15 does not, so both names are checked — upstream only checks frappe 16's."""
 	from press.api.monitoring import MONITORING_ENDPOINT_RATE_LIMIT_WINDOW_SECONDS
 	from press.telegram_utils import Telegram
 
-	ips = get_monitor_server_ips()
+	for ip in get_monitor_server_ips():
+		v15_key = frappe.cache.make_key(f"rl:press.api.monitoring.targets:{ip}")
+		v16_key = v15_key + f":{MONITORING_ENDPOINT_RATE_LIMIT_WINDOW_SECONDS}".encode()
+		for key in (v15_key, v16_key):
+			_reset_if_stuck(key, ip, Telegram)
 
-	for ip in ips:
-		key = f"{frappe.conf.db_name}|rl:press.api.monitoring.targets:{ip}:{MONITORING_ENDPOINT_RATE_LIMIT_WINDOW_SECONDS}"
-		val = frappe.cache.get(key)
-		if not val:
-			continue
-		current_val = cint(val.decode("utf-8"))
-		if current_val > 100:
-			frappe.cache.delete(key)
-			with contextlib.suppress(Exception):
-				msg = f"Rate limit key for monitoring server {ip} had value {current_val} which is too high. Deleted the key.\n@adityahase @balamurali27 @tanmoysrt"
-				Telegram("Errors").send(msg)
+
+def _reset_if_stuck(key: bytes, ip: str, telegram) -> None:
+	val = frappe.cache.get(key)
+	if not val:
+		return
+	current_val = cint(val.decode("utf-8"))
+	has_no_ttl = frappe.cache.ttl(key) == -1
+	if current_val > 100 or has_no_ttl:
+		frappe.cache.delete(key)
+		with contextlib.suppress(Exception):
+			reason = "had no expiry" if has_no_ttl else "was too high"
+			msg = (
+				f"Rate limit key for monitoring server {ip} {reason} (value {current_val}). Deleted the key."
+			)
+			telegram("Errors").send(msg)
