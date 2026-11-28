@@ -163,6 +163,16 @@ class Test2FARecoveryCodeReminders(FrappeTestCase):
 		with patch.object(frappe.db, "commit"):
 			unsubscribe_from_recovery_code_reminders(self.user)
 
+	def test_an_unsigned_unsubscribe_link_changes_nothing(self):
+		with (
+			patch.dict(frappe.flags, {"in_test": False}),
+			patch("press.press.doctype.user_2fa.user_2fa.verify_request", return_value=False),
+		):
+			self.assertIsNone(unsubscribe_from_recovery_code_reminders(self.user))
+		self.assertFalse(
+			frappe.db.get_value("User 2FA", self.user, "unsubscribed_from_recovery_code_reminders")
+		)
+
 	def test_unsubscribing_marks_the_user_as_unsubscribed(self):
 		self.unsubscribe()
 		self.assertTrue(

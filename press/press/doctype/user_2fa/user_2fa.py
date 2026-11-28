@@ -179,7 +179,9 @@ def unsubscribe_from_recovery_code_reminders(email: str):
 	"""Stop the reminders for a user, from the link in the reminder mail."""
 
 	# The link is signed, so anything unsigned isn't ours.
-	if not frappe.in_test and not verify_request():
+	# Aretenic: frappe.flags, not frappe.in_test — that attribute is frappe 16 only, so on the
+	# frappe 15 control plane every click on the link raised AttributeError.
+	if not frappe.flags.in_test and not verify_request():
 		return None
 
 	frappe.db.set_value("User 2FA", email, "unsubscribed_from_recovery_code_reminders", 1)
